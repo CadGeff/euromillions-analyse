@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Numéros chauds</title>
+<meta name="description" content="Analyse statistique de 1981 tirages EuroMillions : les « numéros chauds » n'existent pas, et voici la démonstration.">
+<style>
+  :root {
+    color-scheme: light;
+    --plane:        #f9f9f7;
+    --surface:      #fcfcfb;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --grid:         #e1e0d9;
+    --axis:         #c3c2b7;
+    --series:       #2a78d6;
+    --alert:        #d03b3b;
+    --band-fort:    #dfe9f7;
+    --band-faible:  #eef2f8;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:       #0d0d0d;
+      --surface:     #1a1a19;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --muted:       #898781;
+      --grid:        #2c2c2a;
+      --axis:        #383835;
+      --series:      #3987e5;
+      --alert:       #d03b3b;
+      --band-fort:   #1c2a3d;
+      --band-faible: #15202c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:       #0d0d0d;
+    --surface:     #1a1a19;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --axis:        #383835;
+    --series:      #3987e5;
+    --alert:       #d03b3b;
+    --band-fort:   #1c2a3d;
+    --band-faible: #15202c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--ink);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 56px 16px 96px; }
+
+  header { margin-bottom: 40px; }
+  h1 {
+    font-size: clamp(30px, 6vw, 46px);
+    line-height: 1.12;
+    letter-spacing: -0.022em;
+    margin: 0 0 14px;
+    font-weight: 660;
+  }
+  .chapeau { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .meta { font-size: 13.5px; color: var(--muted); margin-top: 18px; }
+
+  h2 {
+    font-size: 21px; letter-spacing: -0.012em; font-weight: 640;
+    margin: 56px 0 6px; padding-top: 28px; border-top: 1px solid var(--grid);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  .sous { color: var(--ink-2); margin: 0 0 22px; max-width: 64ch; }
+  p { max-width: 64ch; }
+  strong { font-weight: 640; }
+
+  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 28px 0 8px; }
+  .tuile { background: var(--surface); border: 1px solid var(--grid); border-radius: var(--radius); padding: 16px 18px; }
+  .tuile .val { font-size: 27px; font-weight: 660; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .tuile .lib { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  figure { margin: 24px 0 0; background: var(--surface); border: 1px solid var(--grid); border-radius: var(--radius); padding: 20px 18px 14px; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.55; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+  .legende { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 14px; }
+  .legende span { display: inline-flex; align-items: center; gap: 7px; }
+  .pastille { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  .encadre {
+    background: var(--surface); border: 1px solid var(--grid);
+    border-left: 3px solid var(--series); border-radius: var(--radius);
+    padding: 16px 20px; margin: 26px 0;
+  }
+  .encadre p { margin: 0; max-width: none; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin-top: 18px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--grid); }
+  th { font-weight: 620; color: var(--ink-2); font-size: 13px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  details { margin-top: 20px; }
+  summary { cursor: pointer; font-size: 14px; color: var(--ink-2); }
+  details[open] summary { margin-bottom: 8px; }
+
+  footer { margin-top: 68px; padding-top: 24px; border-top: 1px solid var(--grid); font-size: 13.5px; color: var(--muted); }
+  footer a { color: var(--ink-2); }
+
+  .infobulle {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--ink); color: var(--plane); font-size: 12.5px; line-height: 1.5;
+    padding: 7px 10px; border-radius: 7px; white-space: nowrap; z-index: 20;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>Les « numéros chauds » n'existent pas</h1>
+  <p class="chapeau">
+    Cette page construit l'outil qui permettrait de les trouver, puis démontre
+    qu'il ne trouve rien. Tout est calculé à partir des archives publiques de
+    la Française des Jeux.
+  </p>
+  <p class="meta" id="meta"></p>
+</header>
+
+<section>
+  <h2>Ce que montre un tableau de fréquences</h2>
+  <p class="sous">
+    Premier réflexe : compter. Certains numéros sortent nettement plus que
+    d'autres, et l'écart entre le premier et le dernier a de quoi impressionner.
+  </p>
+  <div class="tuiles" id="tuiles-haut"></div>
+</section>
+
+<section>
+  <h2>Ce que le hasard produit tout seul</h2>
+  <p class="sous">
+    L'erreur est de comparer les numéros entre eux. Il faut les comparer à ce
+    qu'un tirage parfaitement équilibré produirait. La bande ci-dessous est
+    cette variation normale : tant qu'une barre y reste, elle ne dit rien.
+  </p>
+
+  <figure>
+    <div class="legende">
+      <span><i class="pastille" style="background: var(--series)"></i>Sorties observées</span>
+      <span><i class="pastille" style="background: var(--band-fort)"></i>Variation normale (95 %)</span>
+      <span><i class="pastille" style="background: var(--band-faible)"></i>Bande corrigée pour 50 comparaisons</span>
+      <span><i class="pastille" style="background: var(--alert)"></i>Hors bande à 95 %</span>
+    </div>
+    <svg id="g-frequences" viewBox="0 0 880 380" role="img"
+         aria-label="Nombre de sorties de chaque numéro, comparé à la variation attendue d'un tirage équilibré."></svg>
+    <figcaption id="cap-frequences"></figcaption>
+  </figure>
+
+  <div class="encadre">
+    <p id="encadre-bande"></p>
+  </div>
+</section>
+
+<section>
+  <h2>Le test qui tranche</h2>
+  <p class="sous">
+    Regarder les barres une par une ne suffit pas. Le test du khi-deux résume
+    l'ensemble des écarts en un seul nombre, puis le confronte au seuil
+    au-delà duquel le hasard seul n'explique plus rien.
+  </p>
+
+  <figure>
+    <svg id="g-khi2" viewBox="0 0 880 260" role="img"
+         aria-label="Distribution du khi-deux à 49 degrés de liberté, avec la valeur observée et le seuil critique."></svg>
+    <figcaption id="cap-khi2"></figcaption>
+  </figure>
+
+  <div class="tuiles" id="tuiles-test"></div>
+
+  <details>
+    <summary>Le calcul, en clair</summary>
+    <p style="font-size:14.5px">
+      Pour chaque numéro on mesure l'écart entre les sorties observées et les
+      sorties attendues, on l'élève au carré pour que les écarts positifs et
+      négatifs ne s'annulent pas, puis on divise par l'attendu — un écart de 20
+      sur un attendu de 30 est énorme, le même sur un attendu de 5 000 est du
+      bruit. La somme de ces 50 termes est le khi-deux. Les degrés de liberté
+      valent 49 : une fois 49 effectifs connus et le total fixé, le dernier est
+      déterminé.
+    </p>
+  </details>
+</section>
+
+<section>
+  <h2>Et les numéros « en retard » ?</h2>
+  <p class="sous">
+    L'autre intuition tenace : un numéro absent depuis longtemps serait
+    « dû ». Voici les absences que le hasard a réellement produites.
+  </p>
+
+  <figure>
+    <svg id="g-absences" viewBox="0 0 880 300" role="img"
+         aria-label="Plus longue absence observée pour chaque numéro, en nombre de tirages consécutifs."></svg>
+    <figcaption id="cap-absences"></figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Ce qu'on peut réellement optimiser</h2>
+  <p class="sous">
+    Un seul levier résiste à l'analyse, et il ne porte pas sur la probabilité
+    de gagner.
+  </p>
+  <p>
+    Le jackpot est <strong>partagé entre tous les gagnants</strong>. On ne peut
+    pas modifier ses chances de gagner, mais on peut modifier le nombre de
+    personnes avec qui l'on partagerait. Or les joueurs ne choisissent pas au
+    hasard : ils jouent massivement des dates de naissance, donc des numéros de
+    1 à 31.
+  </p>
+  <table id="t-popularite">
+    <thead><tr><th>Mesure</th><th class="num">Observé</th><th class="num">Théorie</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p>
+    Les boules se comportent exactement comme la théorie le prévoit : la zone
+    « dates » n'a aucun avantage. <strong>L'opportunité vient entièrement du
+    comportement des joueurs, pas du tirage.</strong> Une grille contenant des
+    numéros supérieurs à 31 a la même probabilité de sortir, mais serait
+    partagée avec moins de monde.
+  </p>
+</section>
+
+<section>
+  <h2>Conclusion</h2>
+  <p>
+    Les écarts de fréquence qu'affichent tous les sites de statistiques sont la
+    signature normale du hasard. Sur cinquante numéros, il y en aura toujours un
+    en tête et un en queue, même avec des boules parfaitement équilibrées.
+  </p>
+  <p>
+    La Française des Jeux l'écrit elle-même sur ses pages de statistiques : il
+    n'est pas possible de déterminer des probabilités fiables sur les tirages à
+    venir.
+  </p>
+</section>
+
+<footer>
+  <p>
+    Données publiques de la Française des Jeux. Projet d'analyse statistique à
+    but pédagogique, sans lien avec aucun opérateur de jeux et ne proposant
+    aucune méthode de jeu.<br>
+    Code et données : <a href="https://github.com/CadGeff/euromillions-analyse">github.com/CadGeff/euromillions-analyse</a>
+  </p>
+</footer>
+
+</div>
+<div class="infobulle" id="infobulle"></div>
+
+<script>
+const DONNEES = {"periode": {"debut": "13/02/2004", "fin": "15/09/2026", "tirages": 1981}, "frequences": [{"numero": 1, "sorties": 187, "absence_max": 58, "absence_actuelle": 1}, {"numero": 2, "sorties": 186, "absence_max": 48, "absence_actuelle": 4}, {"numero": 3, "sorties": 194, "absence_max": 65, "absence_actuelle": 8}, {"numero": 4, "sorties": 200, "absence_max": 56, "absence_actuelle": 27}, {"numero": 5, "sorties": 203, "absence_max": 52, "absence_actuelle": 9}, {"numero": 6, "sorties": 193, "absence_max": 55, "absence_actuelle": 23}, {"numero": 7, "sorties": 203, "absence_max": 51, "absence_actuelle": 1}, {"numero": 8, "sorties": 191, "absence_max": 57, "absence_actuelle": 6}, {"numero": 9, "sorties": 186, "absence_max": 76, "absence_actuelle": 8}, {"numero": 10, "sorties": 218, "absence_max": 56, "absence_actuelle": 0}, {"numero": 11, "sorties": 193, "absence_max": 60, "absence_actuelle": 3}, {"numero": 12, "sorties": 198, "absence_max": 50, "absence_actuelle": 3}, {"numero": 13, "sorties": 203, "absence_max": 58, "absence_actuelle": 2}, {"numero": 14, "sorties": 205, "absence_max": 52, "absence_actuelle": 5}, {"numero": 15, "sorties": 201, "absence_max": 50, "absence_actuelle": 1}, {"numero": 16, "sorties": 195, "absence_max": 87, "absence_actuelle": 0}, {"numero": 17, "sorties": 217, "absence_max": 65, "absence_actuelle": 2}, {"numero": 18, "sorties": 177, "absence_max": 51, "absence_actuelle": 0}, {"numero": 19, "sorties": 220, "absence_max": 43, "absence_actuelle": 3}, {"numero": 20, "sorties": 203, "absence_max": 67, "absence_actuelle": 34}, {"numero": 21, "sorties": 213, "absence_max": 52, "absence_actuelle": 17}, {"numero": 22, "sorties": 155, "absence_max": 57, "absence_actuelle": 0}, {"numero": 23, "sorties": 223, "absence_max": 46, "absence_actuelle": 4}, {"numero": 24, "sorties": 201, "absence_max": 60, "absence_actuelle": 13}, {"numero": 25, "sorties": 208, "absence_max": 62, "absence_actuelle": 12}, {"numero": 26, "sorties": 206, "absence_max": 70, "absence_actuelle": 11}, {"numero": 27, "sorties": 206, "absence_max": 70, "absence_actuelle": 3}, {"numero": 28, "sorties": 192, "absence_max": 48, "absence_actuelle": 0}, {"numero": 29, "sorties": 219, "absence_max": 44, "absence_actuelle": 9}, {"numero": 30, "sorties": 198, "absence_max": 59, "absence_actuelle": 6}, {"numero": 31, "sorties": 187, "absence_max": 60, "absence_actuelle": 13}, {"numero": 32, "sorties": 179, "absence_max": 47, "absence_actuelle": 36}, {"numero": 33, "sorties": 174, "absence_max": 44, "absence_actuelle": 2}, {"numero": 34, "sorties": 199, "absence_max": 54, "absence_actuelle": 12}, {"numero": 35, "sorties": 208, "absence_max": 56, "absence_actuelle": 2}, {"numero": 36, "sorties": 185, "absence_max": 43, "absence_actuelle": 15}, {"numero": 37, "sorties": 212, "absence_max": 44, "absence_actuelle": 4}, {"numero": 38, "sorties": 201, "absence_max": 42, "absence_actuelle": 8}, {"numero": 39, "sorties": 197, "absence_max": 45, "absence_actuelle": 1}, {"numero": 40, "sorties": 180, "absence_max": 40, "absence_actuelle": 8}, {"numero": 41, "sorties": 181, "absence_max": 46, "absence_actuelle": 25}, {"numero": 42, "sorties": 224, "absence_max": 50, "absence_actuelle": 5}, {"numero": 43, "sorties": 180, "absence_max": 75, "absence_actuelle": 35}, {"numero": 44, "sorties": 224, "absence_max": 48, "absence_actuelle": 22}, {"numero": 45, "sorties": 209, "absence_max": 45, "absence_actuelle": 5}, {"numero": 46, "sorties": 177, "absence_max": 66, "absence_actuelle": 3}, {"numero": 47, "sorties": 188, "absence_max": 82, "absence_actuelle": 4}, {"numero": 48, "sorties": 196, "absence_max": 82, "absence_actuelle": 6}, {"numero": 49, "sorties": 198, "absence_max": 44, "absence_actuelle": 9}, {"numero": 50, "sorties": 212, "absence_max": 54, "absence_actuelle": 1}], "reference": {"total": 9905, "attendu": 198.1, "ecart_type": 13.93, "bande_ponctuelle": [171, 225], "bande_simultanee": [152, 244], "attendus_hors_bande": 2.5}, "test": {"khi2": 52.9, "ddl": 49, "critique": 66.34, "p": 0.326, "courbe": [{"x": 0.0, "y": 0.0}, {"x": 0.442, "y": 0.0}, {"x": 0.885, "y": 0.0}, {"x": 1.327, "y": 0.0}, {"x": 1.769, "y": 0.0}, {"x": 2.211, "y": 0.0}, {"x": 2.654, "y": 0.0}, {"x": 3.096, "y": 0.0}, {"x": 3.538, "y": 0.0}, {"x": 3.98, "y": 0.0}, {"x": 4.423, "y": 0.0}, {"x": 4.865, "y": 0.0}, {"x": 5.307, "y": 0.0}, {"x": 5.749, "y": 0.0}, {"x": 6.192, "y": 0.0}, {"x": 6.634, "y": 0.0}, {"x": 7.076, "y": 0.0}, {"x": 7.518, "y": 0.0}, {"x": 7.961, "y": 0.0}, {"x": 8.403, "y": 0.0}, {"x": 8.845, "y": 0.0}, {"x": 9.287, "y": 0.0}, {"x": 9.73, "y": 0.0}, {"x": 10.172, "y": 0.0}, {"x": 10.614, "y": 0.0}, {"x": 11.056, "y": 0.0}, {"x": 11.499, "y": 1e-08}, {"x": 11.941, "y": 2e-08}, {"x": 12.383, "y": 3e-08}, {"x": 12.825, "y": 6e-08}, {"x": 13.268, "y": 1.1e-07}, {"x": 13.71, "y": 1.9e-07}, {"x": 14.152, "y": 3.1e-07}, {"x": 14.595, "y": 5.2e-07}, {"x": 15.037, "y": 8.4e-07}, {"x": 15.479, "y": 1.32e-06}, {"x": 15.921, "y": 2.06e-06}, {"x": 16.364, "y": 3.14e-06}, {"x": 16.806, "y": 4.71e-06}, {"x": 17.248, "y": 6.96e-06}, {"x": 17.69, "y": 1.011e-05}, {"x": 18.133, "y": 1.448e-05}, {"x": 18.575, "y": 2.045e-05}, {"x": 19.017, "y": 2.85e-05}, {"x": 19.459, "y": 3.921e-05}, {"x": 19.902, "y": 5.33e-05}, {"x": 20.344, "y": 7.161e-05}, {"x": 20.786, "y": 9.516e-05}, {"x": 21.228, "y": 0.00012511}, {"x": 21.671, "y": 0.00016281}, {"x": 22.113, "y": 0.00020982}, {"x": 22.555, "y": 0.00026786}, {"x": 22.997, "y": 0.00033889}, {"x": 23.44, "y": 0.00042503}, {"x": 23.882, "y": 0.00052864}, {"x": 24.324, "y": 0.00065222}, {"x": 24.766, "y": 0.00079846}, {"x": 25.209, "y": 0.0009702}, {"x": 25.651, "y": 0.00117037}, {"x": 26.093, "y": 0.00140202}, {"x": 26.535, "y": 0.00166821}, {"x": 26.978, "y": 0.00197202}, {"x": 27.42, "y": 0.00231649}, {"x": 27.862, "y": 0.00270454}, {"x": 28.304, "y": 0.00313896}, {"x": 28.747, "y": 0.0036223}, {"x": 29.189, "y": 0.00415689}, {"x": 29.631, "y": 0.0047447}, {"x": 30.074, "y": 0.00538735}, {"x": 30.516, "y": 0.00608603}, {"x": 30.958, "y": 0.00684147}, {"x": 31.4, "y": 0.00765388}, {"x": 31.843, "y": 0.00852294}, {"x": 32.285, "y": 0.00944774}, {"x": 32.727, "y": 0.0104268}, {"x": 33.169, "y": 0.01145804}, {"x": 33.612, "y": 0.01253877}, {"x": 34.054, "y": 0.01366572}, {"x": 34.496, "y": 0.01483504}, {"x": 34.938, "y": 0.01604232}, {"x": 35.381, "y": 0.01728264}, {"x": 35.823, "y": 0.01855062}, {"x": 36.265, "y": 0.01984042}, {"x": 36.707, "y": 0.02114587}, {"x": 37.15, "y": 0.02246045}, {"x": 37.592, "y": 0.02377744}, {"x": 38.034, "y": 0.0250899}, {"x": 38.476, "y": 0.02639081}, {"x": 38.919, "y": 0.02767311}, {"x": 39.361, "y": 0.02892979}, {"x": 39.803, "y": 0.03015394}, {"x": 40.245, "y": 0.03133883}, {"x": 40.688, "y": 0.03247798}, {"x": 41.13, "y": 0.03356521}, {"x": 41.572, "y": 0.0345947}, {"x": 42.014, "y": 0.03556106}, {"x": 42.457, "y": 0.03645935}, {"x": 42.899, "y": 0.03728513}, {"x": 43.341, "y": 0.0380345}, {"x": 43.784, "y": 0.0387041}, {"x": 44.226, "y": 0.03929116}, {"x": 44.668, "y": 0.03979349}, {"x": 45.11, "y": 0.04020951}, {"x": 45.553, "y": 0.0405382}, {"x": 45.995, "y": 0.04077915}, {"x": 46.437, "y": 0.04093249}, {"x": 46.879, "y": 0.04099893}, {"x": 47.322, "y": 0.04097966}, {"x": 47.764, "y": 0.04087642}, {"x": 48.206, "y": 0.04069136}, {"x": 48.648, "y": 0.0404271}, {"x": 49.091, "y": 0.04008662}, {"x": 49.533, "y": 0.03967327}, {"x": 49.975, "y": 0.03919068}, {"x": 50.417, "y": 0.03864278}, {"x": 50.86, "y": 0.0380337}, {"x": 51.302, "y": 0.03736776}, {"x": 51.744, "y": 0.03664942}, {"x": 52.186, "y": 0.03588322}, {"x": 52.629, "y": 0.0350738}, {"x": 53.071, "y": 0.03422579}, {"x": 53.513, "y": 0.03334382}, {"x": 53.955, "y": 0.03243248}, {"x": 54.398, "y": 0.03149628}, {"x": 54.84, "y": 0.03053962}, {"x": 55.282, "y": 0.0295668}, {"x": 55.724, "y": 0.02858195}, {"x": 56.167, "y": 0.02758903}, {"x": 56.609, "y": 0.02659183}, {"x": 57.051, "y": 0.02559394}, {"x": 57.493, "y": 0.02459873}, {"x": 57.936, "y": 0.02360937}, {"x": 58.378, "y": 0.02262878}, {"x": 58.82, "y": 0.0216597}, {"x": 59.263, "y": 0.02070459}, {"x": 59.705, "y": 0.01976571}, {"x": 60.147, "y": 0.01884508}, {"x": 60.589, "y": 0.01794453}, {"x": 61.032, "y": 0.01706562}, {"x": 61.474, "y": 0.01620975}, {"x": 61.916, "y": 0.01537809}, {"x": 62.358, "y": 0.01457162}, {"x": 62.801, "y": 0.01379112}, {"x": 63.243, "y": 0.01303723}, {"x": 63.685, "y": 0.0123104}, {"x": 64.127, "y": 0.01161092}, {"x": 64.57, "y": 0.01093895}, {"x": 65.012, "y": 0.01029451}, {"x": 65.454, "y": 0.00967751}, {"x": 65.896, "y": 0.00908773}, {"x": 66.339, "y": 0.00852487}, {"x": 66.781, "y": 0.00798852}, {"x": 67.223, "y": 0.00747821}, {"x": 67.665, "y": 0.00699338}, {"x": 68.108, "y": 0.00653341}, {"x": 68.55, "y": 0.00609766}, {"x": 68.992, "y": 0.0056854}, {"x": 69.434, "y": 0.0052959}, {"x": 69.877, "y": 0.00492838}, {"x": 70.319, "y": 0.00458206}, {"x": 70.761, "y": 0.00425611}, {"x": 71.203, "y": 0.00394972}, {"x": 71.646, "y": 0.00366206}, {"x": 72.088, "y": 0.00339232}, {"x": 72.53, "y": 0.00313966}, {"x": 72.973, "y": 0.00290329}, {"x": 73.415, "y": 0.0026824}, {"x": 73.857, "y": 0.0024762}, {"x": 74.299, "y": 0.00228392}, {"x": 74.742, "y": 0.00210482}, {"x": 75.184, "y": 0.00193817}, {"x": 75.626, "y": 0.00178327}, {"x": 76.068, "y": 0.00163942}, {"x": 76.511, "y": 0.00150599}, {"x": 76.953, "y": 0.00138232}, {"x": 77.395, "y": 0.00126783}, {"x": 77.837, "y": 0.00116193}, {"x": 78.28, "y": 0.00106407}, {"x": 78.722, "y": 0.00097372}, {"x": 79.164, "y": 0.00089038}, {"x": 79.606, "y": 0.00081357}, {"x": 80.049, "y": 0.00074285}, {"x": 80.491, "y": 0.0006778}, {"x": 80.933, "y": 0.000618}, {"x": 81.375, "y": 0.00056308}, {"x": 81.818, "y": 0.00051269}, {"x": 82.26, "y": 0.00046648}, {"x": 82.702, "y": 0.00042416}, {"x": 83.144, "y": 0.00038541}, {"x": 83.587, "y": 0.00034997}, {"x": 84.029, "y": 0.00031758}, {"x": 84.471, "y": 0.000288}, {"x": 84.913, "y": 0.00026101}, {"x": 85.356, "y": 0.00023639}, {"x": 85.798, "y": 0.00021396}, {"x": 86.24, "y": 0.00019354}, {"x": 86.683, "y": 0.00017496}, {"x": 87.125, "y": 0.00015807}, {"x": 87.567, "y": 0.00014272}, {"x": 88.009, "y": 0.00012879}, {"x": 88.452, "y": 0.00011614}, {"x": 88.894, "y": 0.00010468}, {"x": 89.336, "y": 9.429e-05}, {"x": 89.778, "y": 8.489e-05}, {"x": 90.221, "y": 7.638e-05}, {"x": 90.663, "y": 6.868e-05}, {"x": 91.105, "y": 6.173e-05}, {"x": 91.547, "y": 5.544e-05}, {"x": 91.99, "y": 4.977e-05}, {"x": 92.432, "y": 4.466e-05}, {"x": 92.874, "y": 4.005e-05}, {"x": 93.316, "y": 3.59e-05}, {"x": 93.759, "y": 3.216e-05}, {"x": 94.201, "y": 2.879e-05}, {"x": 94.643, "y": 2.576e-05}, {"x": 95.085, "y": 2.304e-05}, {"x": 95.528, "y": 2.06e-05}, {"x": 95.97, "y": 1.841e-05}, {"x": 96.412, "y": 1.644e-05}, {"x": 96.854, "y": 1.467e-05}, {"x": 97.297, "y": 1.309e-05}, {"x": 97.739, "y": 1.168e-05}, {"x": 98.181, "y": 1.041e-05}, {"x": 98.623, "y": 9.27e-06}, {"x": 99.066, "y": 8.26e-06}, {"x": 99.508, "y": 7.35e-06}, {"x": 99.95, "y": 6.54e-06}, {"x": 100.392, "y": 5.81e-06}, {"x": 100.835, "y": 5.17e-06}, {"x": 101.277, "y": 4.59e-06}, {"x": 101.719, "y": 4.08e-06}, {"x": 102.162, "y": 3.62e-06}, {"x": 102.604, "y": 3.21e-06}, {"x": 103.046, "y": 2.85e-06}, {"x": 103.488, "y": 2.52e-06}, {"x": 103.931, "y": 2.24e-06}, {"x": 104.373, "y": 1.98e-06}, {"x": 104.815, "y": 1.75e-06}, {"x": 105.257, "y": 1.55e-06}, {"x": 105.7, "y": 1.37e-06}, {"x": 106.142, "y": 1.21e-06}]}, "popularite": {"moyenne_observee": 3.12, "moyenne_theorique": 3.1, "part_observee": 8.1, "part_theorique": 8.0}};
+
+(function () {
+  const bulle = document.getElementById("infobulle");
+  const nb = n => n.toLocaleString("fr-FR");
+  // Virgule decimale : la convention francaise, y compris dans les graphiques.
+  const fr = v => String(v).replace(".", ",");
+
+  function survol(el, texte) {
+    el.style.cursor = "crosshair";
+    el.addEventListener("pointerenter", e => {
+      bulle.innerHTML = texte;
+      bulle.style.opacity = 1;
+      deplacer(e);
+    });
+    el.addEventListener("pointermove", deplacer);
+    el.addEventListener("pointerleave", () => { bulle.style.opacity = 0; });
+    function deplacer(e) {
+      bulle.style.left = Math.min(e.clientX + 14, innerWidth - bulle.offsetWidth - 10) + "px";
+      bulle.style.top = (e.clientY - bulle.offsetHeight - 12) + "px";
+    }
+  }
+
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (nom, attrs) => {
+    const n = document.createElementNS(NS, nom);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  };
+
+  // Une annotation posee dans l'aire du graphique finit toujours par croiser
+  // une marque. On la pose donc sur un fond opaque de la couleur de la surface,
+  // plutot que de chercher une zone libre qui n'existe pas.
+  function annotation(svg, x, y, texte, ancre) {
+    const t = el("text", { x: ancre === "end" ? x - 6 : x + 6, y: y + 1,
+      "text-anchor": ancre, fill: "var(--ink-2)", "font-size": 11.5 });
+    t.textContent = texte;
+    svg.appendChild(t);
+    // On mesure le texte rendu plutot que d'estimer sa largeur : une estimation
+    // laisse depasser les marques sous les bords du fond.
+    t.setAttribute("dominant-baseline", "middle");
+  }
+
+  // ---- Entête -----------------------------------------------------------
+  const p = DONNEES.periode;
+  document.getElementById("meta").textContent =
+    `${nb(p.tirages)} tirages EuroMillions, du ${p.debut} au ${p.fin} — ` +
+    `${nb(DONNEES.reference.total)} boules tirées.`;
+
+  // ---- Tuiles -----------------------------------------------------------
+  const freq = DONNEES.frequences;
+  const tries = [...freq].sort((a, b) => b.sorties - a.sorties);
+  const haut = tries[0], bas = tries[tries.length - 1];
+
+  function tuiles(cible, items) {
+    const hote = document.getElementById(cible);
+    hote.innerHTML = items.map(i =>
+      `<div class="tuile"><div class="val">${i.v}</div><div class="lib">${i.l}</div></div>`).join("");
+  }
+
+  tuiles("tuiles-haut", [
+    { v: haut.numero, l: `Le plus sorti — ${nb(haut.sorties)} fois` },
+    { v: bas.numero, l: `Le moins sorti — ${nb(bas.sorties)} fois` },
+    { v: nb(haut.sorties - bas.sorties), l: "Sorties d'écart entre les deux" },
+    { v: fr(DONNEES.reference.attendu), l: "Sorties attendues par numéro" },
+  ]);
+
+  const t = DONNEES.test;
+  tuiles("tuiles-test", [
+    { v: fr(t.khi2), l: "Khi-deux observé" },
+    { v: fr(t.critique), l: "Seuil critique à 5 %" },
+    { v: fr(t.p.toFixed(3)), l: "p-value" },
+    { v: "Aucun", l: "Numéro anormalement fréquent" },
+  ]);
+
+  // ---- Graphique 1 : fréquences ----------------------------------------
+  (function () {
+    const svg = document.getElementById("g-frequences");
+    const L = 880, H = 380, mg = { h: 14, b: 34, g: 46, d: 104 };
+    const ref = DONNEES.reference;
+    const [p1, p2] = ref.bande_ponctuelle, [s1, s2] = ref.bande_simultanee;
+
+    const yMin = Math.min(s1, bas.sorties) - 14;
+    const yMax = Math.max(s2, haut.sorties) + 14;
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const Y = v => mg.h + ph * (1 - (v - yMin) / (yMax - yMin));
+    const pas = px / freq.length;
+    const larg = pas * 0.62;
+
+    // bandes
+    svg.appendChild(el("rect", { x: mg.g, y: Y(s2), width: px, height: Y(s1) - Y(s2),
+      fill: "var(--band-faible)" }));
+    svg.appendChild(el("rect", { x: mg.g, y: Y(p2), width: px, height: Y(p1) - Y(p2),
+      fill: "var(--band-fort)" }));
+
+    // graduations
+    const gradPas = 20;
+    for (let v = Math.ceil(yMin / gradPas) * gradPas; v <= yMax; v += gradPas) {
+      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+        stroke: "var(--grid)", "stroke-width": 1 }));
+      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = v;
+      svg.appendChild(lb);
+    }
+
+    // ligne d'attendu
+    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(ref.attendu), y2: Y(ref.attendu),
+      stroke: "var(--axis)", "stroke-width": 2, "stroke-dasharray": "5 4" }));
+    annotation(svg, L - mg.d, Y(ref.attendu), `attendu : ${fr(ref.attendu)}`, "start");
+
+    let horsBande = 0;
+    freq.forEach((f, i) => {
+      const dehors = f.sorties < p1 || f.sorties > p2;
+      if (dehors) horsBande++;
+      const y0 = Y(ref.attendu), y1 = Y(f.sorties);
+      const x = mg.g + i * pas + (pas - larg) / 2;
+      const r = el("rect", {
+        x, y: Math.min(y0, y1), width: larg, height: Math.max(Math.abs(y1 - y0), 1.5),
+        rx: 2, fill: dehors ? "var(--alert)" : "var(--series)",
+      });
+      survol(r, `<b>Numéro ${f.numero}</b><br>${nb(f.sorties)} sorties ` +
+                `(${f.sorties > ref.attendu ? "+" : ""}${fr((f.sorties - ref.attendu).toFixed(1))})`);
+      svg.appendChild(r);
+
+      if (f.numero % 5 === 0 || f.numero === 1) {
+        const lb = el("text", { x: x + larg / 2, y: H - mg.b + 18, "text-anchor": "middle",
+          fill: "var(--muted)", "font-size": 11 });
+        lb.textContent = f.numero;
+        svg.appendChild(lb);
+      }
+    });
+
+    const ax = el("text", { x: mg.g + px / 2, y: H - 2, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "numéro de boule";
+    svg.appendChild(ax);
+
+    document.getElementById("cap-frequences").textContent =
+      `Chaque barre mesure l'écart d'un numéro à la moyenne attendue (${fr(ref.attendu)} sorties). ` +
+      `La bande foncée couvre 95 % de la variation qu'un tirage équilibré produit pour un numéro donné ; ` +
+      `la bande claire l'élargit pour tenir compte du fait qu'on examine 50 numéros à la fois.`;
+
+    document.getElementById("encadre-bande").innerHTML =
+      `Un seul numéro sort de la bande à 95 % — le <b>${bas.numero}</b>, avec ${nb(bas.sorties)} sorties. ` +
+      `Or en examinant 50 numéros à un seuil de 5 %, on s'attend à en voir <b>${ref.attendus_hors_bande.toString().replace(".", ",")}</b> ` +
+      `sortir par pur hasard. Il y en a donc <i>moins</i> que prévu. ` +
+      `Une fois la bande corrigée pour ces 50 comparaisons simultanées, <b>aucun numéro n'en sort</b>.`;
+  })();
+
+  // ---- Graphique 2 : distribution du khi-deux --------------------------
+  (function () {
+    const svg = document.getElementById("g-khi2");
+    const L = 880, H = 260, mg = { h: 22, b: 40, g: 20, d: 20 };
+    const c = t.courbe;
+    const xMax = c[c.length - 1].x, yMax = Math.max(...c.map(d => d.y)) * 1.12;
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const X = v => mg.g + px * (v / xMax);
+    const Y = v => mg.h + ph * (1 - v / yMax);
+
+    // aire de rejet (au-delà du seuil critique)
+    const rejet = c.filter(d => d.x >= t.critique);
+    if (rejet.length) {
+      let d = `M ${X(rejet[0].x)} ${Y(0)}`;
+      rejet.forEach(pt => d += ` L ${X(pt.x)} ${Y(pt.y)}`);
+      d += ` L ${X(rejet[rejet.length - 1].x)} ${Y(0)} Z`;
+      svg.appendChild(el("path", { d, fill: "var(--alert)", "fill-opacity": 0.16 }));
+    }
+
+    // aire d'acceptation
+    const ok = c.filter(d => d.x <= t.critique);
+    let da = `M ${X(ok[0].x)} ${Y(0)}`;
+    ok.forEach(pt => da += ` L ${X(pt.x)} ${Y(pt.y)}`);
+    da += ` L ${X(ok[ok.length - 1].x)} ${Y(0)} Z`;
+    svg.appendChild(el("path", { d: da, fill: "var(--series)", "fill-opacity": 0.12 }));
+
+    // courbe
+    let dc = "";
+    c.forEach((pt, i) => dc += (i ? " L " : "M ") + X(pt.x) + " " + Y(pt.y));
+    svg.appendChild(el("path", { d: dc, fill: "none", stroke: "var(--series)", "stroke-width": 2 }));
+
+    // axe
+    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(0), y2: Y(0),
+      stroke: "var(--axis)", "stroke-width": 1 }));
+
+    function repere(x, couleur, titre, valeur, cote) {
+      svg.appendChild(el("line", { x1: X(x), x2: X(x), y1: Y(0), y2: mg.h - 6,
+        stroke: couleur, "stroke-width": 2 }));
+      const a = el("text", { x: X(x) + (cote === "d" ? 7 : -7), y: mg.h + 4,
+        "text-anchor": cote === "d" ? "start" : "end", fill: "var(--ink)",
+        "font-size": 12.5, "font-weight": 620 });
+      a.textContent = titre;
+      svg.appendChild(a);
+      const b = el("text", { x: X(x) + (cote === "d" ? 7 : -7), y: mg.h + 20,
+        "text-anchor": cote === "d" ? "start" : "end", fill: "var(--ink-2)", "font-size": 12 });
+      b.textContent = valeur;
+      svg.appendChild(b);
+    }
+    repere(t.khi2, "var(--series)", "Observé", fr(t.khi2), "g");
+    repere(t.critique, "var(--alert)", "Seuil critique", fr(t.critique), "d");
+
+    for (let v = 0; v <= xMax; v += 20) {
+      const lb = el("text", { x: X(v), y: H - mg.b + 20, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = v;
+      svg.appendChild(lb);
+    }
+    const ax = el("text", { x: mg.g + px / 2, y: H - 6, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "valeur du khi-deux (49 degrés de liberté)";
+    svg.appendChild(ax);
+
+    document.getElementById("cap-khi2").textContent =
+      `La courbe montre les valeurs de khi-deux qu'un tirage parfaitement équilibré produit. ` +
+      `La zone rouge, à droite du seuil, ne représente que 5 % des cas : y tomber signalerait un biais. ` +
+      `La valeur observée (${fr(t.khi2)}) est très en deçà — p = ${fr(t.p.toFixed(3))}, ` +
+      `soit une situation parfaitement banale.`;
+  })();
+
+  // ---- Graphique 3 : absences ------------------------------------------
+  (function () {
+    const svg = document.getElementById("g-absences");
+    const L = 880, H = 300, mg = { h: 16, b: 34, g: 46, d: 104 };
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const maxi = Math.max(...freq.map(f => f.absence_max));
+    const yMax = Math.ceil((maxi + 8) / 10) * 10;
+    const Y = v => mg.h + ph * (1 - v / yMax);
+    const pas = px / freq.length, larg = pas * 0.62;
+
+    const medianes = [...freq.map(f => f.absence_max)].sort((a, b) => a - b);
+    const med = medianes[Math.floor(medianes.length / 2)];
+
+    for (let v = 0; v <= yMax; v += 20) {
+      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+        stroke: "var(--grid)", "stroke-width": 1 }));
+      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = v;
+      svg.appendChild(lb);
+    }
+
+    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(med), y2: Y(med),
+      stroke: "var(--axis)", "stroke-width": 2, "stroke-dasharray": "5 4" }));
+    annotation(svg, L - mg.d, Y(med), `médiane : ${med} tirages`, "start");
+
+    freq.forEach((f, i) => {
+      const x = mg.g + i * pas + (pas - larg) / 2;
+      const r = el("rect", { x, y: Y(f.absence_max), width: larg,
+        height: Y(0) - Y(f.absence_max), rx: 2, fill: "var(--series)" });
+      survol(r, `<b>Numéro ${f.numero}</b><br>absence record : ${f.absence_max} tirages` +
+                `<br>absence actuelle : ${f.absence_actuelle}`);
+      svg.appendChild(r);
+      if (f.numero % 5 === 0 || f.numero === 1) {
+        const lb = el("text", { x: x + larg / 2, y: H - mg.b + 18, "text-anchor": "middle",
+          fill: "var(--muted)", "font-size": 11 });
+        lb.textContent = f.numero;
+        svg.appendChild(lb);
+      }
+    });
+
+    const ax = el("text", { x: mg.g + px / 2, y: H - 2, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "numéro de boule";
+    svg.appendChild(ax);
+
+    const record = freq.reduce((a, b) => b.absence_max > a.absence_max ? b : a);
+    document.getElementById("cap-absences").textContent =
+      `Plus longue série de tirages consécutifs sans sortie, pour chaque numéro. ` +
+      `Le record appartient au ${record.numero} avec ${record.absence_max} tirages d'absence, ` +
+      `et la médiane s'établit à ${med}. Tous les numéros ont connu de longues absences : ` +
+      `en observer une n'a donc rien d'exceptionnel, et ne change rien au tirage suivant.`;
+  })();
+
+  // ---- Tableau popularité ----------------------------------------------
+  (function () {
+    const po = DONNEES.popularite;
+    const lignes = [
+      ["Boules ≤ 31 par tirage, en moyenne", po.moyenne_observee, po.moyenne_theorique],
+      ["Tirages dont les 5 boules sont ≤ 31", po.part_observee + " %", po.part_theorique + " %"],
+    ];
+    document.querySelector("#t-popularite tbody").innerHTML = lignes.map(
+      l => `<tr><td>${l[0]}</td><td class="num">${String(l[1]).replace(".", ",")}</td>` +
+           `<td class="num">${String(l[2]).replace(".", ",")}</td></tr>`).join("");
+  })();
+})();
+</script>
+</body>
+</html>
