@@ -17,8 +17,10 @@
     --axis:         #c3c2b7;
     --series:       #2a78d6;
     --alert:        #d03b3b;
-    --band-fort:    #dfe9f7;
-    --band-faible:  #eef2f8;
+    --band-fort:    #cfe0f7;
+    --band-faible:  #edf1f6;
+    --bord-fort:    #8fb6e4;
+    --bord-faible:  #b9c6d6;
     --radius: 10px;
   }
   @media (prefers-color-scheme: dark) {
@@ -33,8 +35,10 @@
       --axis:        #383835;
       --series:      #3987e5;
       --alert:       #d03b3b;
-      --band-fort:   #1c2a3d;
-      --band-faible: #15202c;
+      --band-fort:   #24395a;
+      --band-faible: #121820;
+      --bord-fort:   #4a6f9e;
+      --bord-faible: #3a4654;
     }
   }
   :root[data-theme="dark"] {
@@ -48,8 +52,10 @@
     --axis:        #383835;
     --series:      #3987e5;
     --alert:       #d03b3b;
-    --band-fort:   #1c2a3d;
-    --band-faible: #15202c;
+    --band-fort:   #24395a;
+    --band-faible: #121820;
+    --bord-fort:   #4a6f9e;
+    --bord-faible: #3a4654;
   }
 
   * { box-sizing: border-box; }
@@ -155,8 +161,8 @@
   <figure>
     <div class="legende">
       <span><i class="pastille" style="background: var(--series)"></i>Sorties observées</span>
-      <span><i class="pastille" style="background: var(--band-fort)"></i>Variation normale (95 %)</span>
-      <span><i class="pastille" style="background: var(--band-faible)"></i>Bande corrigée pour 50 comparaisons</span>
+      <span><i class="pastille" style="background: var(--band-fort); border: 1px solid var(--bord-fort)"></i>Variation normale (95 %)</span>
+      <span><i class="pastille" style="background: var(--band-faible); border: 1px dashed var(--bord-faible)"></i>Bande corrigée pour 50 comparaisons</span>
       <span><i class="pastille" style="background: var(--alert)"></i>Hors bande à 95 %</span>
     </div>
     <svg id="g-frequences" viewBox="0 0 880 380" role="img"
@@ -317,8 +323,19 @@
 
   // ---- Tuiles -----------------------------------------------------------
   const freq = DONNEES.frequences;
-  const tries = [...freq].sort((a, b) => b.sorties - a.sorties);
-  const haut = tries[0], bas = tries[tries.length - 1];
+  const maxi = Math.max(...freq.map(f => f.sorties));
+  const mini = Math.min(...freq.map(f => f.sorties));
+  // Les ex aequo sont la norme, pas l'exception : plusieurs numeros peuvent
+  // partager le record. Prendre le premier d'un tri en masquerait les autres.
+  const tetes = freq.filter(f => f.sorties === maxi).map(f => f.numero);
+  const queues = freq.filter(f => f.sorties === mini).map(f => f.numero);
+  const haut = { numero: tetes[0], sorties: maxi };
+  const bas = { numero: queues[0], sorties: mini };
+
+  // « 42 », « 42 et 44 », « 42, 44 et 7 »
+  const liste = ns => ns.length === 1 ? String(ns[0])
+    : ns.slice(0, -1).join(", ") + " et " + ns[ns.length - 1];
+  const accord = (ns, sing, plur) => ns.length === 1 ? sing : plur;
 
   function tuiles(cible, items) {
     const hote = document.getElementById(cible);
@@ -327,9 +344,13 @@
   }
 
   tuiles("tuiles-haut", [
-    { v: haut.numero, l: `Le plus sorti — ${nb(haut.sorties)} fois` },
-    { v: bas.numero, l: `Le moins sorti — ${nb(bas.sorties)} fois` },
-    { v: nb(haut.sorties - bas.sorties), l: "Sorties d'écart entre les deux" },
+    { v: liste(tetes),
+      l: `${accord(tetes, "Le plus sorti", "Les plus sortis")} — ` +
+         `${nb(maxi)} fois${accord(tetes, "", " chacun")}` },
+    { v: liste(queues),
+      l: `${accord(queues, "Le moins sorti", "Les moins sortis")} — ` +
+         `${nb(mini)} fois${accord(queues, "", " chacun")}` },
+    { v: nb(maxi - mini), l: "Sorties d'écart entre les extrêmes" },
     { v: fr(DONNEES.reference.attendu), l: "Sorties attendues par numéro" },
   ]);
 
@@ -356,10 +377,18 @@
     const larg = pas * 0.62;
 
     // bandes
+    // La bande large est bornee par un trait tirete, l'etroite par un trait
+    // plein : la distinction ne repose pas sur la seule nuance de fond.
     svg.appendChild(el("rect", { x: mg.g, y: Y(s2), width: px, height: Y(s1) - Y(s2),
       fill: "var(--band-faible)" }));
+    [s1, s2].forEach(v => svg.appendChild(el("line", {
+      x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+      stroke: "var(--bord-faible)", "stroke-width": 1, "stroke-dasharray": "4 3" })));
     svg.appendChild(el("rect", { x: mg.g, y: Y(p2), width: px, height: Y(p1) - Y(p2),
       fill: "var(--band-fort)" }));
+    [p1, p2].forEach(v => svg.appendChild(el("line", {
+      x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+      stroke: "var(--bord-fort)", "stroke-width": 1 })));
 
     // graduations
     const gradPas = 20;
@@ -409,8 +438,15 @@
       `La bande foncée couvre 95 % de la variation qu'un tirage équilibré produit pour un numéro donné ; ` +
       `la bande claire l'élargit pour tenir compte du fait qu'on examine 50 numéros à la fois.`;
 
+    const dehorsListe = freq.filter(f => f.sorties < p1 || f.sorties > p2);
+    const ndehors = dehorsListe.length;
+    const phrase = ndehors === 1
+      ? `Un seul numéro sort de la bande à 95 % — le <b>${dehorsListe[0].numero}</b>, ` +
+        `avec ${nb(dehorsListe[0].sorties)} sorties. `
+      : `${ndehors} numéros sortent de la bande à 95 % : ` +
+        `<b>${liste(dehorsListe.map(f => f.numero))}</b>. `;
     document.getElementById("encadre-bande").innerHTML =
-      `Un seul numéro sort de la bande à 95 % — le <b>${bas.numero}</b>, avec ${nb(bas.sorties)} sorties. ` +
+      phrase +
       `Or en examinant 50 numéros à un seuil de 5 %, on s'attend à en voir <b>${ref.attendus_hors_bande.toString().replace(".", ",")}</b> ` +
       `sortir par pur hasard. Il y en a donc <i>moins</i> que prévu. ` +
       `Une fois la bande corrigée pour ces 50 comparaisons simultanées, <b>aucun numéro n'en sort</b>.`;
