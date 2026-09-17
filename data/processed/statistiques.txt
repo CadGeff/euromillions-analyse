@@ -1,0 +1,112 @@
+ANALYSE STATISTIQUE - EUROMILLIONS
+==================================
+
+Periode : 13/02/2004 -> 15/09/2026   (1981 tirages)
+
+1. Les boules (1-50, historique complet)
+----------------------------------------
+  Boules tirees            : 9905
+  Numeros possibles        : 50
+  Sorties attendues/numero : 198.1
+
+  Les plus sortis   : 42 (224x), 44 (224x), 23 (223x)
+  Les moins sortis  : 22 (155x), 33 (174x), 18 (177x)
+  Ecart max au centre : 69 sorties entre le premier et le dernier
+
+  khi2 observe      : 52.90
+  degres de liberte : 49
+  seuil critique 5% : 66.34
+  p-value           : 0.326
+
+  => khi2 (52.90) INFERIEUR au seuil (66.34).
+     Les ecarts observes sont exactement ce que produit un
+     tirage equilibre. Aucun numero n'est 'chaud'.
+
+2. Les etoiles, regime par regime
+---------------------------------
+  Le nombre d'etoiles a change deux fois. Melanger les periodes
+  fausserait le denominateur : chaque regime est teste seul.
+
+  2004-2011 : 50 boules / 9 etoiles
+     378 tirages, 9 etoiles possibles
+     khi2=5.38  seuil=15.51  p=0.716  ->  compatible avec l'equiprobabilite
+
+  2011-2016 : 50 boules / 11 etoiles
+     562 tirages, 11 etoiles possibles
+     khi2=18.38  seuil=18.31  p=0.049  ->  ECART SIGNIFICATIF
+
+  2016+ : 50 boules / 12 etoiles
+     1041 tirages, 12 etoiles possibles
+     khi2=13.93  seuil=19.68  p=0.237  ->  compatible avec l'equiprobabilite
+
+3. Les absences prolongees
+--------------------------
+  L'intuition du 'numero en retard' suppose qu'une longue absence
+  appelle une sortie. Voici ce que le hasard produit sans aide :
+
+  Absence la plus longue observee : 87 tirages (numero 16)
+  Absence maximale mediane        : 54 tirages
+  Absence actuelle la plus longue : 36 tirages (numero 32)
+
+  Chaque numero a deja connu une absence de plusieurs dizaines
+  de tirages. En voir une aujourd'hui n'a donc rien d'anormal,
+  et ne change en rien la probabilite du prochain tirage.
+
+4. Ce qu'on peut reellement optimiser
+-------------------------------------
+  Impossible d'augmenter ses chances de gagner. Possible, en
+  revanche, d'augmenter ce qu'on gagne SI l'on gagne : le jackpot
+  est partage entre tous les gagnants, et les joueurs ne choisissent
+  pas au hasard. Ils jouent des dates de naissance, donc 1 a 31.
+
+  Boules <= 31 par tirage, en moyenne : 3.12  (theorie : 3.10)
+  Tirages dont les 5 boules sont <= 31 : 8.1 %  (theorie : 8.0 %)
+
+  Les boules se comportent conformement a la theorie : la zone
+  'dates' n'a aucun avantage. L'opportunite vient entierement du
+  comportement des joueurs, pas du tirage. Une grille contenant
+  des numeros > 31 a la meme probabilite de sortir, mais serait
+  partagee avec moins de monde.
+
+  C'est la seule conclusion actionnable de cette analyse, et elle
+  ne dit rien sur la probabilite de gagner.
+
+5. Pourquoi le resultat de 2011-2016 ne prouve rien
+--------------------------------------------------
+  Un des quatre tests ressort sous le seuil : les etoiles de la
+  periode 2011-2016, avec p = 0.049. Un analyste presse y verrait
+  un biais du tirage. C'est un piege, pour deux raisons.
+
+  D'abord le seuil de 5 % n'est pas une frontiere entre le vrai et
+  le faux : c'est une convention. p = 0.049 et p = 0.051 decrivent
+  des donnees pratiquement identiques. Traiter le premier comme une
+  decouverte et le second comme un non-evenement n'a aucun sens.
+
+  Ensuite et surtout, le probleme des tests multiples. Un seuil a
+  5 % signifie qu'un test sur vingt franchit la barre par pur
+  hasard, meme quand rien n'est biaise. En enchainant 4 tests, la
+  probabilite d'en voir au moins un 'significatif' par accident
+  vaut 1 - 0.95^4, soit environ 19 %.
+
+  La correction de Bonferroni ajuste le seuil en le divisant par le
+  nombre de tests : 0.05 / 4 = 0.0125. Le resultat de
+  2011-2016 (p = 0.049) n'y survit pas, et de loin.
+
+  C'est precisement ainsi que naissent les fausses decouvertes :
+  en multipliant les decoupages jusqu'a en trouver un qui passe,
+  puis en ne publiant que celui-la.
+
+  => Aucun des quatre tests ne resiste a une lecture rigoureuse.
+
+
+Conclusion
+----------
+  Les 'numeros chauds' n'existent pas. Les ecarts de frequence
+  visibles dans n'importe quel tableau de statistiques sont la
+  signature normale du hasard : sur 50 numeros, il y en aura
+  toujours un en tete et un en queue, meme avec des boules
+  parfaitement equilibrees.
+
+  La FDJ le dit elle-meme sur ses pages de statistiques : il n'est
+  pas possible de determiner des probabilites fiables sur les
+  tirages a venir.
