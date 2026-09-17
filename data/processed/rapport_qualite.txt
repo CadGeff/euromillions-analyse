@@ -1,0 +1,77 @@
+RAPPORT QUALITE - INGESTION EUROMILLIONS
+========================================
+
+Archives lues
+-------------
+  euromillions.csv                   378 tirages  encodage=ascii      colonnes=52
+  euromillions_2.csv                 286 tirages  encodage=ascii      colonnes=55
+  euromillions_201902.csv             97 tirages  encodage=cp1252     colonnes=76
+  euromillions_202002.csv            691 tirages  encodage=utf-8      colonnes=76
+  euromillions_3.csv                 276 tirages  encodage=ascii      colonnes=55
+  euromillions_4.csv                 253 tirages  encodage=cp1252     colonnes=75  <-- separateur final absent de l'en-tete : 1 champ(s) vide(s) en trop par ligne
+
+Couverture
+----------
+  Tirages retenus     : 1981
+  Periode             : 2004-02-13 -> 2026-09-15
+  Dates illisibles    : 0
+
+Doublons de date
+----------------
+  Aucun.
+
+Coherence des tirages
+---------------------
+  Tirages avec boules repetees   : 0
+  Tirages avec etoiles repetees  : 0
+  Tirages sans 5 boules          : 0
+
+Controle des regimes (bornes observees vs regles attendues)
+-----------------------------------------------------------
+  2004-2011 : 50 boules / 9 etoiles
+       378 tirages   boules 1-50 (attendu 1-50)
+                    etoiles 1-9 (attendu 1-9)
+  2011-2016 : 50 boules / 11 etoiles
+       562 tirages   boules 1-50 (attendu 1-50)
+                    etoiles 1-11 (attendu 1-11)
+  2016+ : 50 boules / 12 etoiles
+      1041 tirages   boules 1-50 (attendu 1-50)
+                    etoiles 1-12 (attendu 1-12)
+
+Tirages par an
+--------------
+  Attendu : ~52/an jusqu'en 2010 (hebdomadaire), ~104/an a partir de 2012 (bi-hebdomadaire). 2011 est l'annee de bascule.
+  2004 :  47  (annee partielle)
+  2005 :  52
+  2006 :  52
+  2007 :  52
+  2008 :  52
+  2009 :  52
+  2010 :  53
+  2011 :  86  (bascule hebdo -> bi-hebdo en mai)
+  2012 : 104
+  2013 : 105
+  2014 : 104
+  2015 : 104
+  2016 : 105
+  2017 : 104
+  2018 : 104
+  2019 : 105
+  2020 : 104
+  2021 : 105
+  2022 : 104
+  2023 : 104
+  2024 : 105
+  2025 : 104
+  2026 :  74  (annee partielle)
+
+Trous dans la serie
+-------------------
+  Rythme attendu : 1 tirage/semaine jusqu'au 10/05/2011 (vendredi seul), 2/semaine ensuite (mardi et vendredi).
+  Aucun trou anormal.
+
+Deduplication
+-------------
+  Lignes retirees (dates en double) : 0
+  Tirages uniques conserves         : 1981
+  Boules en format long             : 13867

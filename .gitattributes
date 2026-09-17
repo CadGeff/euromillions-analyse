@@ -1,0 +1,8 @@
+# Normalise les fins de ligne du code et de la documentation :
+# LF dans le depot, conversion locale selon la plateforme.
+* text=auto eol=lf
+
+# Les archives brutes de la FDJ sont conservees telles quelles,
+# octet pour octet. Elles servent de reference : les reecrire
+# (fins de ligne, encodage) reviendrait a alterer la source.
+data/raw/** -text
