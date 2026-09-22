@@ -93,18 +93,18 @@ tirage reel (voir modele.py).
   nombre de boules principales exigees par le rang :
 
      rang 11 : 1 boules + 2 etoiles   rho = +0.039   <- temoin : n'exige qu'une boule
-     rang  8 : 2 boules + 2 etoiles   rho = +0.134
-     rang 12 : 2 boules + 1 etoiles   rho = +0.161
      rang 13 : 2 boules + 0 etoiles   rho = +0.208
+     rang 12 : 2 boules + 1 etoiles   rho = +0.161
+     rang  8 : 2 boules + 2 etoiles   rho = +0.134
      rang 10 : 3 boules + 0 etoiles   rho = +0.290   <- rang de reference
-     rang  6 : 3 boules + 2 etoiles   rho = +0.288
      rang  9 : 3 boules + 1 etoiles   rho = +0.233
-     rang  4 : 4 boules + 2 etoiles   rho = +0.227
-     rang  5 : 4 boules + 1 etoiles   rho = +0.310
+     rang  6 : 3 boules + 2 etoiles   rho = +0.288
      rang  7 : 4 boules + 0 etoiles   rho = +0.245
+     rang  5 : 4 boules + 1 etoiles   rho = +0.310
+     rang  4 : 4 boules + 2 etoiles   rho = +0.227
      rang  3 : 5 boules + 0 etoiles   rho = +0.276
-     rang  1 : 5 boules + 2 etoiles   rho = +0.065
      rang  2 : 5 boules + 1 etoiles   rho = +0.218
+     rang  1 : 5 boules + 2 etoiles   rho = +0.065
 
   Le rang 11, qui n'exige qu'une boule principale, ne reagit
   pratiquement pas (rho = +0.039, p = 0.09).

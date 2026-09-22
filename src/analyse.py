@@ -299,7 +299,8 @@ def main() -> None:
                 f"(p = {pop['p_principal']:.1e})", "",
                 "  Le temoin ecarte l'explication fortuite. L'effet doit suivre le",
                 "  nombre de boules principales exigees par le rang :", ""]
-    for rang, ligne in table_rangs.sort_values("boules_exigees").iterrows():
+    for rang, ligne in table_rangs.sort_values(
+            ["boules_exigees", "etoiles_exigees"]).iterrows():
         marque = ""
         if rang == RANG_TEMOIN:
             marque = "   <- temoin : n'exige qu'une boule"

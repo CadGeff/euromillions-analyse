@@ -735,7 +735,7 @@
   (function () {
     const po = DONNEES.popularite, d = po.rangs;
     const svg = document.getElementById("g-rangs");
-    const L = 880, H = 300, mg = { h: 20, b: 52, g: 56, d: 16 };
+    const L = 880, H = 300, mg = { h: 20, b: 66, g: 56, d: 16 };
     const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
     const yMax = Math.max(...d.map(x => x.rho)) * 1.18;
     const Y = v => mg.h + ph * (1 - v / yMax);
@@ -761,17 +761,24 @@
                 `<br>${nb(x.tirages)} tirages avec au moins un gagnant`);
       svg.appendChild(r);
 
+      // Etiquette « boules + etoiles » : le nombre de boules seul se repetait
+      // trois fois de suite sans dire lequel des trois rangs on regarde.
       const lb = el("text", { x: cx, y: H - mg.b + 18, "text-anchor": "middle",
         fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = x.boules;
+      lb.textContent = `${x.boules}+${x.etoiles}`;
       svg.appendChild(lb);
+
+      const rg = el("text", { x: cx, y: H - mg.b + 32, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 9.5 });
+      rg.textContent = `rang ${x.rang}`;
+      svg.appendChild(rg);
     });
 
     annotation(svg, mg.g + (px / d.length) / 2 + 6, Y(d[0].rho) - 14, "témoin", "start");
 
-    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 40, "text-anchor": "middle",
+    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 50, "text-anchor": "middle",
       fill: "var(--muted)", "font-size": 11.5 });
-    ax.textContent = "boules principales exigées par le rang";
+    ax.textContent = "boules + étoiles exigées par le rang";
     svg.appendChild(ax);
 
     const faible = d.reduce((a, b) => b.tirages < a.tirages ? b : a);

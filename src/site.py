@@ -93,7 +93,12 @@ def construire_donnees() -> dict:
               "etoiles": int(l["etoiles_exigees"]),
               "tirages": int(l["tirages"]),
               "rho": round(float(l["rho"]), 3)}
-             for r, l in table_rangs.sort_values("boules_exigees").iterrows()]
+             # Tri sur les deux criteres : a nombre de boules egal, les rangs
+             # s'ordonnent par nombre d'etoiles. Trier sur les seules boules
+             # laissait l'ordre interne au hasard de l'index, ce qui donnait
+             # une suite de rangs incomprehensible a la lecture.
+             for r, l in table_rangs.sort_values(
+                 ["boules_exigees", "etoiles_exigees"]).iterrows()]
 
     return {
         "periode": {
