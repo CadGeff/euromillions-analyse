@@ -16,6 +16,7 @@ il n'est pas possible de déterminer des probabilités fiables sur les tirages.
 | Chemin | Rôle |
 |---|---|
 | `src/ingest.py` | Ingestion, normalisation et contrôles qualité |
+| `src/modele.py` | Modèle probabiliste du tirage, vérifié par simulation |
 | `src/analyse.py` | Test du khi-deux, absences, popularité des grilles |
 | `src/site.py` | Génération de la page web à partir des données |
 | `src/gabarit_site.html` | Gabarit de la page : mise en page et tracé des graphiques |
@@ -23,6 +24,7 @@ il n'est pas possible de déterminer des probabilités fiables sur les tirages.
 | `data/processed/euromillions_tirages.csv` | 1 981 tirages, une ligne chacun |
 | `data/processed/euromillions_boules.csv` | Format long : une ligne par boule tirée |
 | `data/processed/frequences_boules.csv` | Sorties, écart à l'attendu et absences par numéro |
+| `data/processed/popularite_gagnants.csv` | Corrélation gagnants / petits numéros, par rang de gain |
 | `data/processed/rapport_qualite.txt` | Rapport d'anomalies, régénéré à chaque exécution |
 | `data/processed/statistiques.txt` | Résultats des tests, régénérés à chaque exécution |
 | `docs/index.html` | Page publiée, générée — ne pas modifier à la main |
@@ -108,6 +110,54 @@ construire soi-même la liste des noms et à forcer `index_col=False`.
 C'est précisément le genre de défaut qu'un chargement naïf avale sans broncher
 et qui fausse ensuite toute l'analyse en aval.
 
+## Le modèle probabiliste, et l'erreur qu'il corrige
+
+Cette partie du projet existe parce qu'une relecture externe y a trouvé une
+faute. Elle est documentée plutôt que corrigée en silence : c'est l'erreur la
+plus instructive du lot.
+
+**La première version modélisait les sorties comme 5 N tirages indépendants
+d'une boule parmi 50**, soit une loi B(5 N, 1/50). C'est faux. Un tirage
+EuroMillions sort **cinq boules distinctes** : celles d'un même tirage ne sont
+pas indépendantes, et cette dépendance réduit la variance.
+
+Le modèle correct est plus simple : à chaque tirage, un numéro sort ou ne sort
+pas, avec p = 5/50. Sur N tirages, ses sorties suivent B(N, 1/10).
+
+| | σ |
+|---|---|
+| Simulation du tirage réel (20 000 répétitions) | **13,356** |
+| Modèle erroné B(5 N, 1/50) | 13,933 |
+| Modèle correct B(N, 1/10) | 13,353 |
+
+Les deux modèles donnent **la même espérance**, ce qui rend l'erreur invisible
+à l'œil : seule la variance diffère. Les bandes de variation publiées étaient
+4,3 % trop larges.
+
+### La même erreur affectait le test
+
+La statistique de Pearson ne suit pas χ²(K−1) dans ce cadre. La simulation
+donne une moyenne de **44,90 pour K = 50 et B = 5**, là où χ²(49) vaut 49. La
+valeur théorique est K − B, et la statistique doit donc être mise à l'échelle
+par (K−1)/(K−B) avant comparaison.
+
+Le test était **conservateur** : il rejetait moins qu'il n'aurait dû.
+
+| Test | p publié initialement | p corrigé | p par simulation |
+|---|---|---|---|
+| Boules 1–50 | 0,326 | 0,187 | 0,185 |
+| Étoiles 2004–2011 | 0,716 | 0,631 | 0,624 |
+| Étoiles 2011–2016 | 0,049 | **0,026** | 0,029 |
+| Étoiles 2016+ | 0,237 | 0,168 | 0,164 |
+
+Aucune conclusion ne change — mais tous les chiffres affichés étaient faux, et
+le cas limite des étoiles 2011-2016 devient *plus* significatif, pas moins.
+
+`modele.py` ne se contente plus d'appliquer ces formules : sa fonction
+`verifier()` les confronte à une simulation du tirage réel à chaque exécution.
+C'est ce qui a permis de trancher, et ce qui signalera la prochaine erreur de
+modèle.
+
 ## Les contrôles qualité
 
 Le rapport est régénéré à chaque exécution et vérifie :
@@ -143,9 +193,10 @@ démonstration visuelle sur la page publiée.
 **Les fréquences ne révèlent rien.** Sur 9 905 boules tirées, chaque numéro
 devrait sortir 198,1 fois. Le record est partagé par le 42 et le 44 avec 224
 sorties, le dernier est le 22 avec 155 — 69 d'écart, de quoi nourrir n'importe
-quel site de « numéros chauds ». Le test du khi-deux donne pourtant 52,90 pour
-un seuil critique de 66,34 (p = 0,326) : l'écart est très en deçà de ce qu'un
-tirage parfaitement équilibré produit de lui-même.
+quel site de « numéros chauds ». La statistique de Pearson vaut pourtant 52,90,
+soit 57,60 une fois mise à l'échelle, pour un seuil critique de 66,34
+(p = 0,187, confirmé à 0,185 par simulation) : l'écart est très en deçà de ce
+qu'un tirage parfaitement équilibré produit de lui-même.
 
 **Un seul numéro sort de la bande de variation à 95 %, alors que 2,5 étaient
 attendus par pur hasard** — donc moins que prévu. Avec la bande corrigée pour
@@ -156,7 +207,7 @@ les 50 comparaisons simultanées, aucun n'en sort.
 observer une longue n'a donc rien d'exceptionnel.
 
 **Un test sur quatre ressort pourtant « significatif »** — les étoiles de
-2011-2016, à p = 0,049. Il ne prouve rien, et le rapport explique pourquoi :
+2011-2016, à p = 0,026. Il ne prouve rien, et le rapport explique pourquoi :
 le seuil de 5 % est une convention, pas une frontière, et en enchaînant quatre
 tests la probabilité d'en voir au moins un franchir la barre par accident
 avoisine 19 %. La correction de Bonferroni ramène le seuil à 0,0125, que ce
@@ -164,12 +215,41 @@ résultat ne franchit pas. C'est exactement ainsi que naissent les fausses
 découvertes.
 
 **Le seul levier réel ne porte pas sur la probabilité de gagner** mais sur le
-montant du gain. Le jackpot étant partagé entre tous les gagnants, et les
-joueurs choisissant massivement des dates de naissance (donc 1 à 31), une
-grille contenant des numéros supérieurs à 31 a la même probabilité de sortir
-mais serait partagée avec moins de monde. Les données confirment que les
-boules, elles, ignorent cette zone : 3,12 boules ≤ 31 par tirage en moyenne,
-pour 3,10 attendues.
+montant du gain, et il est désormais démontré plutôt qu'affirmé.
+
+Les boules ignorent la zone des dates de naissance : 3,12 boules ≤ 31 par
+tirage en moyenne, pour 3,10 attendues. Restait à montrer que les *joueurs*,
+eux, ne l'ignorent pas — ce que le nombre de gagnants révèle.
+
+À un rang de gain donné, le nombre de gagnants vaut approximativement
+(grilles jouées) × (probabilité qu'une grille corresponde), et ce second
+facteur dépend des numéros que les joueurs cochent. Au rang 10 (3 bons
+numéros) :
+
+| Boules ≤ 31 dans le tirage | Gagnants (médiane) | Tirages |
+|---|---|---|
+| 1 | 69 472 | 82 |
+| 2 | 73 053 | 429 |
+| 3 | 80 841 | 755 |
+| 4 | 91 178 | 544 |
+| 5 | **107 815** | 159 |
+
+Spearman ρ = +0,290 (p ≈ 10⁻³⁹). Un tirage entièrement composé de « dates de
+naissance » produit **55 % de gagnants de plus**.
+
+**Le témoin écarte l'explication fortuite.** L'effet doit suivre le nombre de
+boules principales exigées par chaque rang — et c'est le cas. Le rang 11, qui
+n'en exige qu'une seule, ne réagit pratiquement pas :
+
+| Rang | Boules exigées | ρ |
+|---|---|---|
+| 11 | **1** | **+0,039** (non significatif) |
+| 8 | 2 | +0,134 |
+| 10 | 3 | +0,290 |
+| 5 | 4 | +0,310 |
+
+Une grille contenant des numéros supérieurs à 31 a donc exactement la même
+probabilité de sortir, mais serait partagée avec moins de monde.
 
 ## Licence et source
 

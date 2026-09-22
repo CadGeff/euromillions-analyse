@@ -44,6 +44,16 @@ REGIMES = [
 COLONNES_BOULES = [f"boule_{i}" for i in range(1, 6)]
 COLONNES_ETOILES = [f"etoile_{i}" for i in range(1, 3)]
 
+# Les 13 rangs de gain EuroMillions, avec le nombre de boules et d'etoiles
+# qu'ils exigent. Le nombre de gagnants a un rang depend de la popularite des
+# numeros tires : c'est ce qui permet de mesurer les habitudes des JOUEURS, et
+# pas seulement le comportement des boules.
+RANGS = {
+    1: (5, 2), 2: (5, 1), 3: (5, 0), 4: (4, 2), 5: (4, 1), 6: (3, 2),
+    7: (4, 0), 8: (2, 2), 9: (3, 1), 10: (3, 0), 11: (1, 2), 12: (2, 1),
+    13: (2, 0),
+}
+
 
 # --------------------------------------------------------------------------
 # Utilitaires bas niveau
@@ -130,6 +140,25 @@ def parser_date(valeur: str) -> pd.Timestamp | pd.NaTType:
         # %y : 00-68 -> 2000-2068, ce qui couvre toute la vie du jeu.
         return pd.to_datetime(valeur, format="%d/%m/%y", errors="coerce")
     return pd.to_datetime(valeur, errors="coerce", dayfirst=True)
+
+
+def parser_nombre(valeur: str) -> float:
+    """Convertit un nombre FDJ en flottant.
+
+    Les archives melangent les conventions : espace comme separateur de
+    milliers ('1 037 960'), virgule comme separateur decimal ('47567,7'),
+    et champs vides pour les rangs inexistants a l'epoque.
+    """
+    if not isinstance(valeur, str):
+        return float("nan")
+    valeur = valeur.strip().replace("\u202f", "").replace("\xa0", "")
+    valeur = valeur.replace(" ", "").replace(",", ".")
+    if not valeur:
+        return float("nan")
+    try:
+        return float(valeur)
+    except ValueError:
+        return float("nan")
 
 
 def normaliser_jour(valeur: str) -> str:
@@ -241,6 +270,16 @@ def normaliser(df: pd.DataFrame) -> pd.DataFrame:
     for colonne in COLONNES_BOULES + COLONNES_ETOILES:
         sortie[colonne] = pd.to_numeric(df.get(colonne), errors="coerce").astype("Int64")
 
+    # Nombre de gagnants par rang, en Europe. Sert a mesurer la popularite des
+    # numeros aupres des joueurs : un rang exigeant beaucoup de boules
+    # principales reagit fortement aux numeros tires, un rang qui n'en exige
+    # qu'une n'y reagit presque pas. Ce contraste sert de temoin.
+    for rang in RANGS:
+        colonne = f"nombre_de_gagnant_au_rang{rang}_en_europe"
+        sortie[f"gagnants_rang{rang}"] = (
+            df[colonne].map(parser_nombre) if colonne in df else pd.NA
+        )
+
     # Identifiant FDJ conserve tel quel : son format a change (2011018 -> 26074)
     # et il ne sert pas de cle. La date est la cle.
     sortie["id_fdj"] = df.get("annee_numero_de_tirage", "")
@@ -281,6 +320,61 @@ def au_format_long(df: pd.DataFrame) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 # Controles qualite
 # --------------------------------------------------------------------------
+
+
+def controler_redondance(brut: pd.DataFrame) -> list[str]:
+    """Confronte la lecture aux champs redondants de la source.
+
+    Les archives FDJ repetent deux informations sous une autre forme :
+      - `boules_gagnantes_en_ordre_croissant`, chaine du type '-8-10-15-16-31-'
+      - `jour_de_tirage`, le nom du jour de la semaine
+
+    Ces champs sont donc verifiables sans rien supposer : les cinq colonnes
+    `boule_*` doivent redonner la meme chaine une fois triees, et le jour
+    calcule depuis la date parsee doit correspondre au jour annonce.
+
+    C'est ce controle qui prouve qu'aucun decalage de colonne n'a survecu et
+    que les trois formats de date sont interpretes correctement — en
+    particulier le format a deux chiffres, ambigu par nature. Il tourne sur
+    les donnees dans leur ordre d'origine, avant tout tri.
+    """
+    lignes = ["", "Controle par redondance interne", "-" * 31]
+
+    jours = ["LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI", "DIMANCHE"]
+
+    def decomposer(chaine: str) -> list[int]:
+        return sorted(int(x) for x in str(chaine).strip("-").split("-")
+                      if x.strip().isdigit())
+
+    ecarts_boules = ecarts_etoiles = ecarts_jour = 0
+    non_controlables = 0
+
+    for _, ligne in brut.iterrows():
+        reference = decomposer(ligne.get("boules_gagnantes_en_ordre_croissant", ""))
+        if len(reference) != 5:
+            non_controlables += 1
+        else:
+            lues = sorted(int(ligne[c]) for c in COLONNES_BOULES)
+            if lues != reference:
+                ecarts_boules += 1
+
+        ref_etoiles = decomposer(ligne.get("etoiles_gagnantes_en_ordre_croissant", ""))
+        if len(ref_etoiles) == 2:
+            lues = sorted(int(ligne[c]) for c in COLONNES_ETOILES)
+            if lues != ref_etoiles:
+                ecarts_etoiles += 1
+
+        date = parser_date(ligne.get("date_de_tirage", ""))
+        jour = normaliser_jour(ligne.get("jour_de_tirage", ""))
+        if not pd.isna(date) and jour in jours and jours[date.weekday()] != jour:
+            ecarts_jour += 1
+
+    lignes.append(f"  Tirages confrontes a leur reference : {len(brut)}")
+    lignes.append(f"  Reference inexploitable             : {non_controlables}")
+    lignes.append(f"  Desaccords sur les boules           : {ecarts_boules}")
+    lignes.append(f"  Desaccords sur les etoiles          : {ecarts_etoiles}")
+    lignes.append(f"  Jour annonce != jour de la date     : {ecarts_jour}")
+    return lignes
 
 
 def controler(df: pd.DataFrame, sources: list[Source]) -> list[str]:
@@ -397,6 +491,7 @@ def main() -> None:
     tirages = normaliser(brut)
 
     rapport_avant = controler(tirages, sources)
+    rapport_avant += controler_redondance(brut)
 
     # Deduplication : les archives FDJ se chevauchent. On garde la premiere
     # occurrence de chaque date, apres avoir verifie plus haut que les

@@ -85,6 +85,7 @@
   }
   h2:first-of-type { border-top: none; padding-top: 0; }
   .sous { color: var(--ink-2); margin: 0 0 22px; max-width: 64ch; }
+  h3 { font-size: 16.5px; font-weight: 640; margin: 34px 0 8px; letter-spacing: -0.008em; }
   p { max-width: 64ch; }
   strong { font-weight: 640; }
 
@@ -206,6 +207,37 @@
 </section>
 
 <section>
+  <h2>Quatre tests, et un faux positif</h2>
+  <p class="sous">
+    Les boules ne sont pas seules en jeu : les étoiles ont changé de nombre
+    deux fois, et chaque période demande son propre test. Voici les quatre
+    résultats, et ce qu'il faut en faire.
+  </p>
+
+  <table id="t-tests">
+    <thead><tr><th>Test</th><th>Portée</th><th class="num">p-value</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="encadre">
+    <p id="encadre-multiples"></p>
+  </div>
+
+  <p>
+    Un seuil à 5 % signifie qu'<strong>un test sur vingt franchit la barre par
+    pur hasard</strong>, même quand rien n'est biaisé. Multiplier les découpages
+    jusqu'à en trouver un qui passe, puis ne publier que celui-là, est
+    précisément la manière dont naissent les fausses découvertes.
+  </p>
+  <p>
+    La correction de Bonferroni répond à cela en divisant le seuil par le
+    nombre de tests. Et le seuil de 5 % n'est de toute façon pas une frontière
+    entre le vrai et le faux : c'est une convention. <em>p</em> = 0,049 et
+    <em>p</em> = 0,051 décrivent des données pratiquement identiques.
+  </p>
+</section>
+
+<section>
   <h2>Et les numéros « en retard » ?</h2>
   <p class="sous">
     L'autre intuition tenace : un numéro absent depuis longtemps serait
@@ -228,20 +260,57 @@
   <p>
     Le jackpot est <strong>partagé entre tous les gagnants</strong>. On ne peut
     pas modifier ses chances de gagner, mais on peut modifier le nombre de
-    personnes avec qui l'on partagerait. Or les joueurs ne choisissent pas au
-    hasard : ils jouent massivement des dates de naissance, donc des numéros de
-    1 à 31.
+    personnes avec qui l'on partagerait.
   </p>
+
+  <h3>D'abord : les boules ignorent les dates de naissance</h3>
   <table id="t-popularite">
     <thead><tr><th>Mesure</th><th class="num">Observé</th><th class="num">Théorie</th></tr></thead>
     <tbody></tbody>
   </table>
+
+  <h3>Ensuite : les joueurs, eux, ne les ignorent pas</h3>
   <p>
-    Les boules se comportent exactement comme la théorie le prévoit : la zone
-    « dates » n'a aucun avantage. <strong>L'opportunité vient entièrement du
-    comportement des joueurs, pas du tirage.</strong> Une grille contenant des
-    numéros supérieurs à 31 a la même probabilité de sortir, mais serait
-    partagée avec moins de monde.
+    C'est l'affirmation qu'on lit partout, rarement démontrée. Les archives de
+    la FDJ permettent pourtant de la vérifier : à un rang de gain donné, le
+    nombre de gagnants vaut à peu près <em>(grilles jouées) × (probabilité
+    qu'une grille corresponde)</em>, et ce second facteur dépend des numéros
+    que les joueurs cochent.
+  </p>
+  <p>
+    Le volume de grilles varie beaucoup selon la taille du jackpot, mais il ne
+    dépend pas des numéros qui vont sortir : c'est du bruit, pas un biais.
+  </p>
+
+  <figure>
+    <svg id="g-popularite" viewBox="0 0 880 300" role="img"
+         aria-label="Nombre médian de gagnants selon le nombre de boules inférieures ou égales à 31 dans le tirage."></svg>
+    <figcaption id="cap-popularite"></figcaption>
+  </figure>
+
+  <h3>Le témoin qui écarte le hasard</h3>
+  <p>
+    Une corrélation isolée ne prouve rien. Mais l'effet doit suivre une règle
+    précise : <strong>plus un rang exige de boules principales, plus il doit
+    réagir</strong>. Le rang qui n'en exige qu'une sert alors de témoin — il ne
+    devrait presque pas bouger.
+  </p>
+
+  <figure>
+    <svg id="g-rangs" viewBox="0 0 880 300" role="img"
+         aria-label="Corrélation entre le nombre de gagnants et les petits numéros, pour chaque rang de gain."></svg>
+    <figcaption id="cap-rangs"></figcaption>
+  </figure>
+
+  <div class="encadre">
+    <p id="encadre-temoin"></p>
+  </div>
+
+  <p>
+    <strong>L'opportunité vient donc entièrement du comportement des joueurs,
+    pas du tirage.</strong> Une grille contenant des numéros supérieurs à 31 a
+    exactement la même probabilité de sortir, mais serait partagée avec moins
+    de monde.
   </p>
 </section>
 
@@ -358,9 +427,9 @@
 
   const t = DONNEES.test;
   tuiles("tuiles-test", [
-    { v: fr(t.khi2), l: "Khi-deux observé" },
+    { v: fr(t.khi2), l: `Khi-deux mis à l'échelle (brut ${fr(t.khi2_brut)} × ${fr(t.facteur)})` },
     { v: fr(t.critique), l: "Seuil critique à 5 %" },
-    { v: fr(t.p.toFixed(3)), l: "p-value" },
+    { v: fr(t.p.toFixed(3)), l: `p-value — ${fr(t.p_simulee.toFixed(3))} par simulation` },
     { v: "Aucun", l: "Numéro anormalement fréquent" },
   ]);
 
@@ -554,7 +623,7 @@
       const r = el("rect", { x, y: Y(f.absence_max), width: larg,
         height: Y(0) - Y(f.absence_max), rx: 2, fill: "var(--series)" });
       survol(r, `<b>Numéro ${f.numero}</b><br>absence record : ${f.absence_max} tirages` +
-                `<br>absence au ${p.fin} : ${f.absence_actuelle}`);
+                `<br>absence au ${p.fin} : ${f.absence_finale}`);
       svg.appendChild(r);
       if (f.numero % 5 === 0 || f.numero === 1) {
         const lb = el("text", { x: x + larg / 2, y: H - mg.b + 18, "text-anchor": "middle",
@@ -575,6 +644,152 @@
       `Le record appartient au ${record.numero} avec ${record.absence_max} tirages d'absence, ` +
       `et la médiane s'établit à ${med}. Tous les numéros ont connu de longues absences : ` +
       `en observer une n'a donc rien d'exceptionnel, et ne change rien au tirage suivant.`;
+  })();
+
+  // ---- Tableau des quatre tests ----------------------------------------
+  (function () {
+    const m = DONNEES.multiples;
+    document.querySelector("#t-tests tbody").innerHTML = DONNEES.tests.map(t => {
+      const sous = t.p < 0.05;
+      return `<tr><td>${t.nom}</td><td>${t.detail}</td>` +
+             `<td class="num"${sous ? ' style="color:var(--alert);font-weight:640"' : ""}>` +
+             `${fr(t.p.toFixed(4))}</td></tr>`;
+    }).join("");
+
+    const sous = DONNEES.tests.filter(t => t.p < 0.05);
+    const survivants = DONNEES.tests.filter(t => t.p < m.bonferroni);
+    let txt = "";
+    if (sous.length) {
+      txt += `<b>${sous.length === 1 ? "Un test passe" : sous.length + " tests passent"} ` +
+             `sous le seuil de 5 %</b> : ${sous.map(t => t.nom).join(", ")}. ` +
+             `Un analyste pressé y verrait un biais du tirage. `;
+    }
+    txt += `Mais sur ${m.nombre} tests, la probabilité d'en voir au moins un ` +
+           `« significatif » par accident vaut <b>${m.risque_global} %</b>. ` +
+           `La correction de Bonferroni ramène le seuil à <b>${fr(m.bonferroni)}</b> — `;
+    txt += survivants.length
+      ? `${survivants.length} test(s) y survivent : ${survivants.map(t => t.nom).join(", ")}.`
+      : `<b>aucun test n'y survit</b>.`;
+    document.getElementById("encadre-multiples").innerHTML = txt;
+  })();
+
+  // ---- Graphique 4 : gagnants selon les petits numéros -----------------
+  (function () {
+    const po = DONNEES.popularite, d = po.medianes;
+    const svg = document.getElementById("g-popularite");
+    const L = 880, H = 300, mg = { h: 20, b: 58, g: 64, d: 16 };
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const yMax = Math.max(...d.map(x => x.gagnants)) * 1.14;
+    const Y = v => mg.h + ph * (1 - v / yMax);
+    const pas = px / d.length, larg = Math.min(pas * 0.52, 74);
+
+    for (let v = 0; v <= yMax; v += 20000) {
+      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+        stroke: "var(--grid)", "stroke-width": 1 }));
+      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = nb(v);
+      svg.appendChild(lb);
+    }
+
+    d.forEach((x, i) => {
+      const cx = mg.g + i * pas + pas / 2;
+      const r = el("rect", { x: cx - larg / 2, y: Y(x.gagnants), width: larg,
+        height: Y(0) - Y(x.gagnants), rx: 3, fill: "var(--series)" });
+      survol(r, `<b>${x.petits} boule${x.petits > 1 ? "s" : ""} ≤ 31</b>` +
+                `<br>${nb(x.gagnants)} gagnants (médiane)<br>${nb(x.tirages)} tirages`);
+      svg.appendChild(r);
+
+      const lb = el("text", { x: cx, y: H - mg.b + 20, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 11.5 });
+      lb.textContent = x.petits;
+      svg.appendChild(lb);
+
+      // L'effectif sous chaque barre : la colonne « 0 boule » ne repose que
+      // sur une poignee de tirages et ne doit pas se lire comme les autres.
+      const n = el("text", { x: cx, y: H - mg.b + 34, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 10 });
+      n.textContent = `${nb(x.tirages)} tirages`;
+      svg.appendChild(n);
+    });
+
+    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 52, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "nombre de boules ≤ 31 dans le tirage";
+    svg.appendChild(ax);
+
+    const bas = d.find(x => x.petits === 1) || d[0];
+    const haut = d[d.length - 1];
+    const gain = Math.round((haut.gagnants / bas.gagnants - 1) * 100);
+    document.getElementById("cap-popularite").textContent =
+      `Nombre médian de gagnants au rang ${po.rang_principal} ` +
+      `(${po.boules_principal} bons numéros), selon le nombre de boules ≤ 31 du tirage. ` +
+      `Un tirage entièrement composé de « dates de naissance » produit ${gain} % de ` +
+      `gagnants de plus qu'un tirage qui n'en contient qu'une. ` +
+      `Corrélation de Spearman : ρ = ${fr(po.rho_principal)}. ` +
+      `L'effectif figure sous chaque barre : la colonne de gauche ne repose que sur ` +
+      `${nb(d[0].tirages)} tirages et se lit donc avec prudence.`;
+  })();
+
+  // ---- Graphique 5 : l'effet suit les boules exigées -------------------
+  (function () {
+    const po = DONNEES.popularite, d = po.rangs;
+    const svg = document.getElementById("g-rangs");
+    const L = 880, H = 300, mg = { h: 20, b: 52, g: 56, d: 16 };
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const yMax = Math.max(...d.map(x => x.rho)) * 1.18;
+    const Y = v => mg.h + ph * (1 - v / yMax);
+    const pas = px / d.length, larg = pas * 0.58;
+
+    for (let v = 0; v <= yMax; v += 0.05) {
+      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
+        stroke: "var(--grid)", "stroke-width": 1 }));
+      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = fr(v.toFixed(2));
+      svg.appendChild(lb);
+    }
+
+    d.forEach((x, i) => {
+      const cx = mg.g + i * pas + pas / 2;
+      const temoin = x.rang === po.rang_temoin;
+      const r = el("rect", { x: cx - larg / 2, y: Y(x.rho), width: larg,
+        height: Math.max(Y(0) - Y(x.rho), 1.5), rx: 2,
+        fill: temoin ? "var(--alert)" : "var(--series)" });
+      survol(r, `<b>Rang ${x.rang}</b> — ${x.boules} boule${x.boules > 1 ? "s" : ""}` +
+                ` + ${x.etoiles} étoile${x.etoiles > 1 ? "s" : ""}<br>ρ = ${fr(x.rho)}` +
+                `<br>${nb(x.tirages)} tirages avec au moins un gagnant`);
+      svg.appendChild(r);
+
+      const lb = el("text", { x: cx, y: H - mg.b + 18, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = x.boules;
+      svg.appendChild(lb);
+    });
+
+    annotation(svg, mg.g + (px / d.length) / 2 + 6, Y(d[0].rho) - 14, "témoin", "start");
+
+    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 40, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "boules principales exigées par le rang";
+    svg.appendChild(ax);
+
+    const faible = d.reduce((a, b) => b.tirages < a.tirages ? b : a);
+    document.getElementById("cap-rangs").textContent =
+      `Corrélation entre le nombre de gagnants et le nombre de boules ≤ 31, ` +
+      `pour chacun des treize rangs de gain, classés par nombre de boules exigées. ` +
+      `L'effet croît avec la dépendance du rang aux numéros principaux. ` +
+      `Le rang ${faible.rang} fait exception : c'est le jackpot, remporté seulement ` +
+      `${nb(faible.tirages)} fois, et ses quelques gagnants par tirage rendent son ` +
+      `estimation bien moins fiable que les autres.`;
+
+    document.getElementById("encadre-temoin").innerHTML =
+      `Le rang ${po.rang_temoin} n'exige qu'<b>une seule boule principale</b>. ` +
+      `Si l'effet observé était un artefact, il y apparaîtrait comme ailleurs. ` +
+      `Or il y est pratiquement nul : ρ = <b>${fr(po.rho_temoin)}</b> ` +
+      `(p = ${fr(po.p_temoin)}, non significatif), contre ` +
+      `<b>${fr(po.rho_principal)}</b> au rang ${po.rang_principal}. ` +
+      `L'effet suit exactement ce que la mécanique du jeu prédit.`;
   })();
 
   // ---- Tableau popularité ----------------------------------------------

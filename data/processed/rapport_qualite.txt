@@ -70,6 +70,14 @@ Trous dans la serie
   Rythme attendu : 1 tirage/semaine jusqu'au 10/05/2011 (vendredi seul), 2/semaine ensuite (mardi et vendredi).
   Aucun trou anormal.
 
+Controle par redondance interne
+-------------------------------
+  Tirages confrontes a leur reference : 1981
+  Reference inexploitable             : 0
+  Desaccords sur les boules           : 0
+  Desaccords sur les etoiles          : 0
+  Jour annonce != jour de la date     : 0
+
 Deduplication
 -------------
   Lignes retirees (dates en double) : 0

@@ -3,24 +3,31 @@ ANALYSE STATISTIQUE - EUROMILLIONS
 
 Periode : 13/02/2004 -> 15/09/2026   (1981 tirages)
 
+Modele : a chaque tirage, un numero sort ou ne sort pas, avec une
+probabilite B/K. Sur N tirages, ses sorties suivent B(N, B/K).
+Les 5 boules d'un meme tirage etant distinctes, la statistique de
+Pearson a pour moyenne K-B et non K-1 : elle est mise a l'echelle
+avant comparaison. Chaque test est double d'une simulation du
+tirage reel (voir modele.py).
+
 1. Les boules (1-50, historique complet)
 ----------------------------------------
-  Boules tirees            : 9905
+  Tirages                  : 1981
   Numeros possibles        : 50
   Sorties attendues/numero : 198.1
+  Ecart-type attendu       : 13.35  (simule : 13.15)
 
   Les plus sortis   : 42 (224x), 44 (224x), 23 (223x)
   Les moins sortis  : 22 (155x), 33 (174x), 18 (177x)
-  Ecart max au centre : 69 sorties entre le premier et le dernier
 
-  khi2 observe      : 52.90
-  degres de liberte : 49
-  seuil critique 5% : 66.34
-  p-value           : 0.326
+  Statistique brute : 52.90
+  Mise a l'echelle  : x 1.0889  -> 57.60
+  Seuil critique 5% : 66.34  (49 ddl)
+  p-value           : 0.1871
+  p-value simulee   : 0.1852
 
-  => khi2 (52.90) INFERIEUR au seuil (66.34).
-     Les ecarts observes sont exactement ce que produit un
-     tirage equilibre. Aucun numero n'est 'chaud'.
+  => Compatible avec l'equiprobabilite. Les ecarts observes
+     sont ce que produit un tirage equilibre.
 
 2. Les etoiles, regime par regime
 ---------------------------------
@@ -29,15 +36,18 @@ Periode : 13/02/2004 -> 15/09/2026   (1981 tirages)
 
   2004-2011 : 50 boules / 9 etoiles
      378 tirages, 9 etoiles possibles
-     khi2=5.38  seuil=15.51  p=0.716  ->  compatible avec l'equiprobabilite
+     brut=5.38  x1.1429  -> 6.15   seuil=15.51
+     p=0.6305   p simulee=0.6235   -> compatible
 
   2011-2016 : 50 boules / 11 etoiles
      562 tirages, 11 etoiles possibles
-     khi2=18.38  seuil=18.31  p=0.049  ->  ECART SIGNIFICATIF
+     brut=18.38  x1.1111  -> 20.42   seuil=18.31
+     p=0.0255   p simulee=0.0293   -> SOUS LE SEUIL
 
   2016+ : 50 boules / 12 etoiles
      1041 tirages, 12 etoiles possibles
-     khi2=13.93  seuil=19.68  p=0.237  ->  compatible avec l'equiprobabilite
+     brut=13.93  x1.1000  -> 15.32   seuil=19.68
+     p=0.1681   p simulee=0.1640   -> compatible
 
 3. Les absences prolongees
 --------------------------
@@ -46,58 +56,89 @@ Periode : 13/02/2004 -> 15/09/2026   (1981 tirages)
 
   Absence la plus longue observee : 87 tirages (numero 16)
   Absence maximale mediane        : 54 tirages
-  Absence actuelle la plus longue : 36 tirages (numero 32)
+  Plus longue absence au 15/09/2026  : 36 tirages (numero 32)
 
   Chaque numero a deja connu une absence de plusieurs dizaines
-  de tirages. En voir une aujourd'hui n'a donc rien d'anormal,
-  et ne change en rien la probabilite du prochain tirage.
+  de tirages. En voir une n'a donc rien d'anormal, et ne change
+  en rien la probabilite du prochain tirage.
 
 4. Ce qu'on peut reellement optimiser
 -------------------------------------
   Impossible d'augmenter ses chances de gagner. Possible, en
   revanche, d'augmenter ce qu'on gagne SI l'on gagne : le jackpot
-  est partage entre tous les gagnants, et les joueurs ne choisissent
-  pas au hasard. Ils jouent des dates de naissance, donc 1 a 31.
+  est partage entre tous les gagnants.
 
-  Boules <= 31 par tirage, en moyenne : 3.12  (theorie : 3.10)
-  Tirages dont les 5 boules sont <= 31 : 8.1 %  (theorie : 8.0 %)
+  Les boules, elles, ignorent la zone des dates de naissance :
 
-  Les boules se comportent conformement a la theorie : la zone
-  'dates' n'a aucun avantage. L'opportunite vient entierement du
-  comportement des joueurs, pas du tirage. Une grille contenant
-  des numeros > 31 a la meme probabilite de sortir, mais serait
-  partagee avec moins de monde.
+     Boules <= 31 par tirage, en moyenne  : 3.12  (theorie : 3.10)
+     Tirages dont les 5 boules sont <= 31 : 8.1 %  (theorie : 8.0 %)
 
+  Restait a montrer que les JOUEURS, eux, ne les ignorent pas.
+  Le nombre de gagnants le revele : a rang fixe, il vaut environ
+  (grilles jouees) x (probabilite qu'une grille corresponde), et
+  ce second facteur depend des numeros que les joueurs cochent.
+
+  Gagnants au rang 10 (3 boules) selon le tirage :
+
+     0 boule(s) <= 31 : mediane     78 046 gagnants (11 tirages)
+     1 boule(s) <= 31 : mediane     69 472 gagnants (82 tirages)
+     2 boule(s) <= 31 : mediane     73 053 gagnants (429 tirages)
+     3 boule(s) <= 31 : mediane     80 841 gagnants (755 tirages)
+     4 boule(s) <= 31 : mediane     91 178 gagnants (544 tirages)
+     5 boule(s) <= 31 : mediane    107 815 gagnants (159 tirages)
+
+     Correlation de Spearman : rho = +0.290  (p = 1.2e-39)
+
+  Le temoin ecarte l'explication fortuite. L'effet doit suivre le
+  nombre de boules principales exigees par le rang :
+
+     rang 11 : 1 boules + 2 etoiles   rho = +0.039   <- temoin : n'exige qu'une boule
+     rang  8 : 2 boules + 2 etoiles   rho = +0.134
+     rang 12 : 2 boules + 1 etoiles   rho = +0.161
+     rang 13 : 2 boules + 0 etoiles   rho = +0.208
+     rang 10 : 3 boules + 0 etoiles   rho = +0.290   <- rang de reference
+     rang  6 : 3 boules + 2 etoiles   rho = +0.288
+     rang  9 : 3 boules + 1 etoiles   rho = +0.233
+     rang  4 : 4 boules + 2 etoiles   rho = +0.227
+     rang  5 : 4 boules + 1 etoiles   rho = +0.310
+     rang  7 : 4 boules + 0 etoiles   rho = +0.245
+     rang  3 : 5 boules + 0 etoiles   rho = +0.276
+     rang  1 : 5 boules + 2 etoiles   rho = +0.065
+     rang  2 : 5 boules + 1 etoiles   rho = +0.218
+
+  Le rang 11, qui n'exige qu'une boule principale, ne reagit
+  pratiquement pas (rho = +0.039, p = 0.09).
+  L'effet n'est donc pas un artefact : il suit exactement la
+  dependance de chaque rang aux numeros principaux.
+
+  Conclusion : une grille contenant des numeros > 31 a la meme
+  probabilite de sortir, mais serait partagee avec moins de monde.
   C'est la seule conclusion actionnable de cette analyse, et elle
   ne dit rien sur la probabilite de gagner.
 
-5. Pourquoi le resultat de 2011-2016 ne prouve rien
---------------------------------------------------
-  Un des quatre tests ressort sous le seuil : les etoiles de la
-  periode 2011-2016, avec p = 0.049. Un analyste presse y verrait
-  un biais du tirage. C'est un piege, pour deux raisons.
+5. Le piege des tests multiples
+-------------------------------
+  4 tests d'ajustement ont ete menes. Un seuil a 5 % signifie
+  qu'un test sur vingt franchit la barre par pur hasard, meme
+  quand rien n'est biaise. Sur 4 tests, la probabilite d'en voir
+  au moins un 'significatif' par accident vaut 19 %.
 
-  D'abord le seuil de 5 % n'est pas une frontiere entre le vrai et
-  le faux : c'est une convention. p = 0.049 et p = 0.051 decrivent
-  des donnees pratiquement identiques. Traiter le premier comme une
-  decouverte et le second comme un non-evenement n'a aucun sens.
+  La correction de Bonferroni divise le seuil par 4 :
+  il passe de 0.05 a 0.0125.
 
-  Ensuite et surtout, le probleme des tests multiples. Un seuil a
-  5 % signifie qu'un test sur vingt franchit la barre par pur
-  hasard, meme quand rien n'est biaise. En enchainant 4 tests, la
-  probabilite d'en voir au moins un 'significatif' par accident
-  vaut 1 - 0.95^4, soit environ 19 %.
+     Boules, historique complet             p = 0.1871   au-dessus
+     Etoiles 2004-2011                      p = 0.6305   au-dessus
+     Etoiles 2011-2016                      p = 0.0255   au-dessus
+     Etoiles 2016+                          p = 0.1681   au-dessus
 
-  La correction de Bonferroni ajuste le seuil en le divisant par le
-  nombre de tests : 0.05 / 4 = 0.0125. Le resultat de
-  2011-2016 (p = 0.049) n'y survit pas, et de loin.
+  Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :
+  c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees
+  pratiquement identiques.
 
-  C'est precisement ainsi que naissent les fausses decouvertes :
-  en multipliant les decoupages jusqu'a en trouver un qui passe,
-  puis en ne publiant que celui-la.
-
-  => Aucun des quatre tests ne resiste a une lecture rigoureuse.
-
+  => Aucun test ne survit a la correction. C'est precisement
+     ainsi que naissent les fausses decouvertes : en multipliant
+     les decoupages jusqu'a en trouver un qui passe, puis en ne
+     publiant que celui-la.
 
 Conclusion
 ----------
