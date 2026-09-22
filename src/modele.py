@@ -107,20 +107,25 @@ def verifier(t: Tirage, repetitions: int = 4000, graine: int = 20260922) -> dict
     rng = np.random.default_rng(graine)
     base = np.tile(np.arange(t.K), (t.N, 1))
 
-    # On suit les effectifs d'UN numero d'une simulation a l'autre : c'est bien
+    # On suit les effectifs de CHAQUE numero d'une simulation a l'autre : c'est
     # cette dispersion-la que `ecart_type` pretend decrire. Mesurer l'ecart
     # entre les K numeros d'une meme simulation donnerait une autre quantite,
     # sous-estimee, et validerait la formule a tort.
-    suivi = np.empty(repetitions)
+    #
+    # Les K numeros sont interchangeables sous l'hypothese nulle : on estime
+    # donc l'ecart-type sur chacun, puis on moyenne les K estimations. Suivre
+    # un seul numero donnerait la meme valeur en esperance, mais avec une
+    # imprecision qui ferait passer la formule pour fausse.
+    suivi = np.empty((repetitions, t.K))
     khi2 = np.empty(repetitions)
     for i in range(repetitions):
         tires = rng.permuted(base, axis=1)[:, : t.B]
         effectifs = np.bincount(tires.ravel(), minlength=t.K)
-        suivi[i] = effectifs[0]
+        suivi[i] = effectifs
         khi2[i] = ((effectifs - t.attendu) ** 2 / t.attendu).sum()
 
     return {
-        "ecart_type_simule": float(suivi.std()),
+        "ecart_type_simule": float(suivi.std(axis=0).mean()),
         "ecart_type_formule": t.ecart_type,
         "khi2_moyen_simule": float(khi2.mean()),
         "khi2_moyen_attendu": float(t.K - t.B),

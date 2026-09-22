@@ -20,6 +20,11 @@ Doublons de date
 ----------------
   Aucun.
 
+Chiffres de gagnants europeens
+------------------------------
+  Tirages sans chiffres europeens publies : 1
+    2020-01-31  (euromillions_201902.csv)  -> gagnants marques manquants, pas zero
+
 Coherence des tirages
 ---------------------
   Tirages avec boules repetees   : 0

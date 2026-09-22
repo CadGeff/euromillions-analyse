@@ -280,6 +280,24 @@ def normaliser(df: pd.DataFrame) -> pd.DataFrame:
             df[colonne].map(parser_nombre) if colonne in df else pd.NA
         )
 
+    # Certains tirages n'ont pas de chiffres europeens publies : l'archive y
+    # laisse des zeros a TOUS les rangs, alors que les colonnes francaises sont
+    # remplies. Un zero partout est impossible - le dernier rang compte des
+    # centaines de milliers de gagnants a chaque tirage - donc ces lignes sont
+    # des donnees manquantes deguisees. Lues telles quelles, elles inseraient
+    # un faux zero dans toute analyse des gagnants.
+    colonnes_gagnants = [f"gagnants_rang{r}" for r in RANGS]
+    colonnes_france = [f"nombre_de_gagnant_au_rang{r}_en_france" for r in RANGS
+                       if f"nombre_de_gagnant_au_rang{r}_en_france" in df]
+    europe_vide = sortie[colonnes_gagnants].fillna(0).eq(0).all(axis=1)
+    if colonnes_france:
+        france_remplie = df[colonnes_france].map(parser_nombre).fillna(0).gt(0).any(axis=1)
+        suspectes = europe_vide & france_remplie
+    else:
+        suspectes = europe_vide
+    sortie.loc[suspectes, colonnes_gagnants] = pd.NA
+    sortie["gagnants_non_publies"] = suspectes
+
     # Identifiant FDJ conserve tel quel : son format a change (2011018 -> 26074)
     # et il ne sert pas de cle. La date est la cle.
     sortie["id_fdj"] = df.get("annee_numero_de_tirage", "")
@@ -413,6 +431,14 @@ def controler(df: pd.DataFrame, sources: list[Source]) -> list[str]:
             identiques = groupe[COLONNES_BOULES + COLONNES_ETOILES].drop_duplicates()
             etat = "identiques" if len(identiques) == 1 else "DIVERGENTS"
             lignes.append(f"    {date:%Y-%m-%d}  {etat:12s}  {fichiers}")
+
+    section("Chiffres de gagnants europeens")
+    manquants = df["gagnants_non_publies"].sum() if "gagnants_non_publies" in df else 0
+    lignes.append(f"  Tirages sans chiffres europeens publies : {manquants}")
+    if manquants:
+        for _, ligne in df[df["gagnants_non_publies"]].iterrows():
+            lignes.append(f"    {ligne['date_tirage']:%Y-%m-%d}  ({ligne['source']})  "
+                          f"-> gagnants marques manquants, pas zero")
 
     section("Coherence des tirages")
     boules = df[COLONNES_BOULES]

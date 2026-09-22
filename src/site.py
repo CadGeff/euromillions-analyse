@@ -21,8 +21,6 @@ import datetime
 import json
 from pathlib import Path
 
-import pandas as pd
-
 from analyse import (
     COLONNES_BOULES,
     COLONNES_ETOILES,
@@ -86,18 +84,19 @@ def construire_donnees() -> dict:
         })
 
     table_rangs, pop = popularite(df)
-    medianes = [{"petits": int(k), "gagnants": int(v["median"]), "tirages": int(v["count"])}
-                for k, v in pop["medianes"].iterrows()]
+    medianes = [{"petits": int(k), "gagnants": int(m["median"]), "tirages": int(m["count"])}
+                for k, m in pop["medianes"].iterrows()]
     rangs = [{"rang": int(r),
-              "boules": int(l["boules_exigees"]),
-              "etoiles": int(l["etoiles_exigees"]),
-              "tirages": int(l["tirages"]),
-              "rho": round(float(l["rho"]), 3)}
+              "boules": int(ligne["boules_exigees"]),
+              "etoiles": int(ligne["etoiles_exigees"]),
+              "tirages": int(ligne["tirages"]),
+              "part_sans_gagnant": round(float(ligne["part_sans_gagnant"]) * 100),
+              "rho": round(float(ligne["rho"]), 3)}
              # Tri sur les deux criteres : a nombre de boules egal, les rangs
              # s'ordonnent par nombre d'etoiles. Trier sur les seules boules
              # laissait l'ordre interne au hasard de l'index, ce qui donnait
              # une suite de rangs incomprehensible a la lecture.
-             for r, l in table_rangs.sort_values(
+             for r, ligne in table_rangs.sort_values(
                  ["boules_exigees", "etoiles_exigees"]).iterrows()]
 
     return {

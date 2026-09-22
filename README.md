@@ -58,8 +58,9 @@ recouvrement entre archives.
 
 ## Le vrai travail : normaliser six archives hétérogènes
 
-Les six archives couvrent 22 ans et le format a changé quatre fois. Rien de
-tout cela n'est documenté par la FDJ ; chaque écart a dû être trouvé.
+Les six archives couvrent 22 ans et se répartissent en **quatre formats
+distincts** — reconnaissables à leur nombre de colonnes : 52, 55, 75 et 76.
+Rien de tout cela n'est documenté par la FDJ ; chaque écart a dû être trouvé.
 
 **Deux encodages réels, et un piège de détection.** Quatre archives sont en
 UTF-8 — dont trois en ASCII pur, qui en est un sous-ensemble strict — et deux
@@ -84,6 +85,19 @@ démarré en 2004.
 `MARDI   ` avec des espaces de remplissage. Les noms de colonnes gagnent un
 suffixe `_Euro_Millions` en 2019 avec l'arrivée d'Étoile+, et une colonne
 `numéro_de_tirage_dans_le_cycle` apparaît en cours de route.
+
+### Des gagnants absents déguisés en zéros
+
+Le tirage du 31 janvier 2020 affiche **zéro gagnant aux treize rangs** dans les
+colonnes européennes, alors que les colonnes françaises sont remplies. C'est
+impossible : le dernier rang compte des centaines de milliers de gagnants à
+chaque tirage. Les chiffres européens n'ont simplement pas été publiés pour ce
+tirage-là.
+
+Lu tel quel, ce zéro entre dans les moyennes et les corrélations comme une
+observation légitime. L'ingestion le reconnaît désormais — tous les rangs à
+zéro alors que la France en compte — et marque la ligne comme manquante plutôt
+que nulle. Le rapport qualité la signale nommément.
 
 ### Le piège du séparateur final
 
@@ -126,7 +140,7 @@ pas, avec p = 5/50. Sur N tirages, ses sorties suivent B(N, 1/10).
 
 | | σ |
 |---|---|
-| Simulation du tirage réel (20 000 répétitions) | **13,356** |
+| Simulation du tirage réel | **13,334** |
 | Modèle erroné B(5 N, 1/50) | 13,933 |
 | Modèle correct B(N, 1/10) | 13,353 |
 
@@ -163,6 +177,7 @@ modèle.
 Le rapport est régénéré à chaque exécution et vérifie :
 
 - dates illisibles, doublons, tirages incomplets ;
+- chiffres de gagnants européens non publiés, marqués manquants et non nuls ;
 - boules ou étoiles répétées dans un même tirage ;
 - bornes observées confrontées aux règles attendues de chaque régime ;
 - volume annuel de tirages, avec un seuil adapté au rythme de l'époque ;
@@ -236,6 +251,12 @@ numéros) :
 
 Spearman ρ = +0,290 (p ≈ 10⁻³⁹). Un tirage entièrement composé de « dates de
 naissance » produit **55 % de gagnants de plus**.
+
+Les tirages sans aucun gagnant à un rang sont **conservés**. Les écarter
+reviendrait à conditionner sur la variable expliquée : au rang 1, le jackpot
+n'est remporté qu'une fois sur quatre, et ne garder que ces tirages-là
+sélectionnerait précisément les combinaisons les plus jouées. Un zéro est une
+observation, pas un défaut.
 
 **Le témoin écarte l'explication fortuite.** L'effet doit suivre le nombre de
 boules principales exigées par chaque rang — et c'est le cas. Le rang 11, qui

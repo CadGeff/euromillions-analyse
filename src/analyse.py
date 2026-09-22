@@ -26,7 +26,6 @@ from __future__ import annotations
 from math import comb
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from scipy import stats
 
@@ -128,7 +127,6 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     les autres, l'effet viendrait d'ailleurs.
     """
     petits = (df[COLONNES_BOULES] <= SEUIL_DATES).sum(axis=1)
-    travail = pd.DataFrame({"date_tirage": df["date_tirage"], "petits": petits})
 
     lignes = []
     for rang, (boules, etoiles) in RANGS.items():
@@ -136,7 +134,12 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         if colonne not in df:
             continue
         gagnants = pd.to_numeric(df[colonne], errors="coerce")
-        valides = gagnants.notna() & (gagnants > 0)
+        # On ne retient que les valeurs manquantes. Ecarter les tirages a zero
+        # gagnant reviendrait a conditionner sur la variable expliquee : au
+        # rang 1, le jackpot n'est remporte qu'une fois sur quatre, et ne
+        # garder que ces tirages-la selectionne precisement les combinaisons
+        # les plus jouees. Un zero est une observation, pas un defaut.
+        valides = gagnants.notna()
         if valides.sum() < 200:
             continue
         rho, valeur_p = stats.spearmanr(petits[valides], gagnants[valides])
@@ -145,6 +148,9 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             "boules_exigees": boules,
             "etoiles_exigees": etoiles,
             "tirages": int(valides.sum()),
+            # Part de tirages sans aucun gagnant : au rang 1 elle depasse 75 %,
+            # ce qui ecrase la correlation faute de valeurs a ordonner.
+            "part_sans_gagnant": float((gagnants[valides] == 0).mean()),
             "rho": rho,
             "p": valeur_p,
         })
@@ -152,7 +158,7 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
     colonne = f"gagnants_rang{RANG_PRINCIPAL}"
     gagnants = pd.to_numeric(df[colonne], errors="coerce")
-    valides = gagnants.notna() & (gagnants > 0)
+    valides = gagnants.notna()
     medianes = (pd.DataFrame({"petits": petits[valides], "gagnants": gagnants[valides]})
                 .groupby("petits")["gagnants"].agg(["median", "count"]))
 
@@ -167,14 +173,14 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         "part_observee": float((petits == 5).mean()),
         "part_theorique": comb(SEUIL_DATES, 5) / comb(BOULES_MAX, 5),
     }
-    travail["gagnants_rang_principal"] = gagnants
-    return table, {**detail, "travail": travail}
+    return table, detail
 
 
 # --------------------------------------------------------------------------
 
 
-def bloc_test(titre: str, t: Tirage, observes: pd.Series, controle: dict) -> list[str]:
+def bloc_test(titre: str, t: Tirage, observes: pd.Series,
+              controle: dict) -> tuple[list[str], dict]:
     resultat = t.test_ajustement(observes.values)
     p_sim = p_empirique(controle["distribution"], resultat["khi2_brut"])
 

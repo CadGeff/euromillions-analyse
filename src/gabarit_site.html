@@ -758,7 +758,8 @@
         fill: temoin ? "var(--alert)" : "var(--series)" });
       survol(r, `<b>Rang ${x.rang}</b> — ${x.boules} boule${x.boules > 1 ? "s" : ""}` +
                 ` + ${x.etoiles} étoile${x.etoiles > 1 ? "s" : ""}<br>ρ = ${fr(x.rho)}` +
-                `<br>${nb(x.tirages)} tirages avec au moins un gagnant`);
+                `<br>${nb(x.tirages)} tirages documentés` +
+                `<br>${x.part_sans_gagnant} % sans aucun gagnant`);
       svg.appendChild(r);
 
       // Etiquette « boules + etoiles » : le nombre de boules seul se repetait
@@ -781,14 +782,23 @@
     ax.textContent = "boules + étoiles exigées par le rang";
     svg.appendChild(ax);
 
-    const faible = d.reduce((a, b) => b.tirages < a.tirages ? b : a);
-    document.getElementById("cap-rangs").textContent =
+    // Le rang du jackpot se reconnait a sa combinaison (toutes les boules et
+    // toutes les etoiles), jamais a un classement par effectif : une heuristique
+    // du genre « le rang le moins documente » designe un autre rang des que les
+    // donnees changent, et la legende se met alors a raconter n'importe quoi.
+    const jackpot = d.find(x => x.boules === 5 && x.etoiles === 2);
+    let texte =
       `Corrélation entre le nombre de gagnants et le nombre de boules ≤ 31, ` +
-      `pour chacun des treize rangs de gain, classés par nombre de boules exigées. ` +
-      `L'effet croît avec la dépendance du rang aux numéros principaux. ` +
-      `Le rang ${faible.rang} fait exception : c'est le jackpot, remporté seulement ` +
-      `${nb(faible.tirages)} fois, et ses quelques gagnants par tirage rendent son ` +
-      `estimation bien moins fiable que les autres.`;
+      `pour chacun des treize rangs de gain, classés par nombre de boules puis ` +
+      `d'étoiles exigées. L'effet croît avec la dépendance du rang aux numéros ` +
+      `principaux.`;
+    if (jackpot) {
+      texte += ` Le rang ${jackpot.rang} fait exception : c'est le jackpot, ` +
+               `non remporté dans ${jackpot.part_sans_gagnant} % des tirages et ` +
+               `gagné par une poignée de joueurs quand il l'est. Une variable aussi ` +
+               `grossière laisse peu de prise à une corrélation de rang.`;
+    }
+    document.getElementById("cap-rangs").textContent = texte;
 
     document.getElementById("encadre-temoin").innerHTML =
       `Le rang ${po.rang_temoin} n'exige qu'<b>une seule boule principale</b>. ` +
