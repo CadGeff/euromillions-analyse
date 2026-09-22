@@ -14,6 +14,7 @@ Sortie : docs/index.html
 
 from __future__ import annotations
 
+import datetime
 import json
 from math import comb
 from pathlib import Path
@@ -93,6 +94,11 @@ def construire_donnees() -> dict:
             "debut": df["date_tirage"].min().strftime("%d/%m/%Y"),
             "fin": df["date_tirage"].max().strftime("%d/%m/%Y"),
             "tirages": len(df),
+            # Le jeu de donnees est un instantane : EuroMillions tire deux fois
+            # par semaine, la page prend donc du retard des le tirage suivant.
+            # Afficher la date de generation evite de laisser croire que les
+            # chiffres valent pour aujourd'hui.
+            "generee_le": datetime.date.today().strftime("%d/%m/%Y"),
         },
         "frequences": [
             {

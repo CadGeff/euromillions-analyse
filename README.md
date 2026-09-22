@@ -1,7 +1,8 @@
 # EuroMillions — ce que les statistiques disent vraiment
 
 Pipeline d'ingestion et d'analyse statistique des tirages EuroMillions publiés
-par la Française des Jeux, de février 2004 à septembre 2026.
+par la Française des Jeux, du **13 février 2004 au 15 septembre 2026** inclus,
+soit 1 981 tirages.
 
 **La conclusion d'abord : il n'existe pas de « numéros chauds ».** Ce projet
 construit l'outil qui permettrait de les trouver, puis démontre khi-deux à
@@ -38,6 +39,20 @@ python src/site.py       # données normalisées -> docs/index.html
 Les trois scripts s'enchaînent dans cet ordre et sont rejouables à volonté :
 ajouter une archive dans `data/raw/` et relancer suffit à tout mettre à jour,
 page web comprise. Aucune configuration, aucune clé d'API, aucun état caché.
+
+### Fraîcheur des données
+
+Le jeu de données est un **instantané**, arrêté au tirage du 15 septembre 2026.
+EuroMillions tirant deux fois par semaine, le mardi et le vendredi, il prend du
+retard dès le tirage suivant. Tous les chiffres cités dans ce README et sur la
+page décrivent donc cette période close, et non l'état du jeu au jour où vous
+les lisez.
+
+Mettre à jour se fait en trois gestes : télécharger l'archive courante depuis
+les [pages historique de la FDJ](https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/historique),
+déposer le CSV dans `data/raw/`, relancer les trois scripts. Les contrôles
+qualité signaleront tout changement de format, et la déduplication se charge du
+recouvrement entre archives.
 
 ## Le vrai travail : normaliser six archives hétérogènes
 

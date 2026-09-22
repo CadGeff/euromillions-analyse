@@ -317,9 +317,11 @@
 
   // ---- Entête -----------------------------------------------------------
   const p = DONNEES.periode;
-  document.getElementById("meta").textContent =
+  document.getElementById("meta").innerHTML =
     `${nb(p.tirages)} tirages EuroMillions, du ${p.debut} au ${p.fin} — ` +
-    `${nb(DONNEES.reference.total)} boules tirées.`;
+    `${nb(DONNEES.reference.total)} boules tirées.<br>` +
+    `Jeu de données arrêté au tirage du ${p.fin} ; deux tirages ont lieu chaque ` +
+    `semaine, le mardi et le vendredi. Page générée le ${p.generee_le}.`;
 
   // ---- Tuiles -----------------------------------------------------------
   const freq = DONNEES.frequences;
@@ -552,7 +554,7 @@
       const r = el("rect", { x, y: Y(f.absence_max), width: larg,
         height: Y(0) - Y(f.absence_max), rx: 2, fill: "var(--series)" });
       survol(r, `<b>Numéro ${f.numero}</b><br>absence record : ${f.absence_max} tirages` +
-                `<br>absence actuelle : ${f.absence_actuelle}`);
+                `<br>absence au ${p.fin} : ${f.absence_actuelle}`);
       svg.appendChild(r);
       if (f.numero % 5 === 0 || f.numero === 1) {
         const lb = el("text", { x: x + larg / 2, y: H - mg.b + 18, "text-anchor": "middle",
