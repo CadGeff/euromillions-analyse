@@ -136,8 +136,9 @@ données et **décale tout le reste d'un cran, sans le moindre avertissement**.
 Conséquence sur les 253 tirages du fichier : dates illisibles, et des tirages
 qui semblent contenir deux fois la même boule — alors qu'il s'agit de deux
 colonnes voisines ramenées à la même position. La correction consiste à
-construire soi-même la liste des noms, à forcer `index_col=False`, puis à
-vérifier que les champs surnuméraires sont bien vides avant de les retirer :
+construire soi-même la liste des noms d'après la ligne la plus longue du
+fichier, à forcer `index_col=False`, puis à vérifier que les champs
+surnuméraires sont vides sur toutes les lignes avant de les retirer :
 s'ils ne l'étaient pas, l'ingestion s'arrête plutôt que de lire des données
 décalées.
 
@@ -215,9 +216,12 @@ La statistique de Pearson ne suit pas χ²(K−1) dans ce cadre. La covariance
 entre les effectifs de deux numéros vaut −N p(1−p)/(K−1) : la matrice de
 covariance est celle d'une loi multinomiale multipliée par (K−B)/(K−1). La
 statistique suit donc, pour N grand, (K−B)/(K−1) × χ²(K−1) — pas seulement en
-moyenne, en loi. La mettre à l'échelle par (K−1)/(K−B) la ramène exactement
-sur χ²(K−1). La simulation le confirme : moyenne **44,90** pour une valeur
-théorique de K − B = 45, variance 84,5 pour 82,7.
+moyenne, en loi. La mettre à l'échelle par (K−1)/(K−B) la ramène donc sur
+χ²(K−1) quand N est grand. Pour N fini, ce n'est qu'une approximation : avec
+20 tirages, la loi s'en écarte nettement. Pour les 1 981 tirages du projet, la
+simulation la confirme : moyenne **44,90** pour une valeur théorique de
+K − B = 45, variance 84,5 pour 82,7, et p = 0,185 par simulation contre 0,187
+par la loi.
 
 Le test était **conservateur** : il rejetait moins qu'il n'aurait dû.
 
@@ -265,9 +269,12 @@ Le rapport est régénéré à chaque exécution et vérifie :
 
 ## Les trois régimes de jeu
 
-Les règles ont changé deux fois. Les périodes ne sont donc pas comparables
-entre elles : le dénominateur change, et toute statistique globale mélangeant
-les trois est fausse par construction.
+Les règles ont changé deux fois. Pour les étoiles et les rangs de gain, les
+périodes ne sont pas comparables entre elles : le nombre d'étoiles change, donc
+le dénominateur et les probabilités de chaque rang, et une statistique globale
+qui les mélange est fausse par construction. Les boules, elles, sont tirées
+selon la même règle depuis 2004 (5 parmi 50) : elles se testent sur tout
+l'historique d'un seul tenant.
 
 | Période | Boules | Étoiles | Rangs | Tirages |
 |---|---|---|---|---|
@@ -304,8 +311,9 @@ C'est un peu au-dessus de la valeur moyenne sous le hasard (49), au 81ᵉ
 centile : des écarts un peu plus marqués que d'ordinaire, sans rien d'anormal.
 
 **Le numéro le plus atypique est un numéro froid.** Un seul numéro sort de la
-bande de variation à 95 % (172 à 225 sorties), alors que 2,5 étaient attendus
-par pur hasard : le 22. Il sort aussi, de justesse, de la bande corrigée pour
+bande de variation à 95 % (172 à 225 sorties), le 22, alors qu'un tirage
+équilibré en fait sortir 2,2 en moyenne. Ce n'est pas 2,5 : la loi étant
+discrète, la bande « à 95 % » ne laisse sortir que 4,3 % des numéros. Il sort aussi, de justesse, de la bande corrigée pour
 50 comparaisons (156 à 243). La bonne question est alors : dans un historique
 équilibré, à quelle fréquence le plus atypique des 50 numéros l'est-il au moins
 autant ? Réponse par simulation : **p = 0,044**. C'est sous 5 %, et c'est le
@@ -326,6 +334,11 @@ convention, pas une frontière, et en enchaînant cinq tests la probabilité d'e
 voir au moins un franchir la barre par accident avoisine 23 %. La correction
 de Bonferroni ramène le seuil à 0,01, qu'aucun des deux ne franchit. C'est
 exactement ainsi que naissent les fausses découvertes.
+
+Ces cinq tests portent sur l'équité du tirage. Les corrélations de popularité
+de la section suivante forment une autre famille, de 13 comparaisons. Corrigée
+à son tour (seuil 0,0038), elle ne change rien : toutes les combinaisons sur
+lesquelles s'appuie la conclusion ont p ≤ 10⁻⁷.
 
 ### Le seul levier réel : le montant du gain
 
@@ -375,15 +388,26 @@ dans le tirage (pente log-linéaire, avec un niveau propre à chaque régime) :
 | 5 | +18,7 % | non mesurable | non mesurable |
 
 L'effet croît à chaque boule exigée, et le nombre d'étoiles n'y change presque
-rien. La tendance d'ensemble est nette ; les dernières marches, prises une à
-une, le sont moins : sans étoile, les intervalles à 4 et 5 boules se
-chevauchent, et avec deux étoiles ceux à 3 et 4 boules se touchent. La seule
+rien. Chaque marche est testée directement : on mesure l'effet des petites
+boules sur le rapport entre deux combinaisons voisines, tirage par tirage.
+Comparer deux intervalles de confiance ne suffirait pas, car ils peuvent se
+chevaucher alors que la différence est nette. Les 8 marches sont établies, y
+compris la plus fragile, de 4+0 à 5+0 : +3,1 % [+1,1 ; +5,1]. La seule
 combinaison qui n'exige qu'une boule, 1+2, sert de témoin : son effet ne se
 distingue pas de zéro. Le gain par grille suit exactement le même
 schéma en sens inverse : −6,6 %, −10,5 %, −13,9 % et −17,7 % par petite boule
 pour 2, 3, 4 et 5 bons numéros sans étoile. 5+1 et 5+2 ne sont pas mesurés : 6 %
 et 77 % de leurs tirages n'ont aucun gagnant, et une pente calculée sur les
 seuls tirages gagnés serait biaisée.
+
+Ces intervalles supposent des erreurs indépendantes d'un tirage à l'autre. Les
+résidus, eux, sont autocorrélés (0,33 d'un tirage au suivant) : le volume de
+grilles varie par périodes. Mais le nombre de petites boules d'un tirage ne
+l'est pas (0,02), et dans ce cas l'erreur-type usuelle reste valable. Par
+prudence, chaque intervalle retient quand même la plus grande de deux
+erreurs-types, l'usuelle (HC0) et celle de Newey-West, robuste à
+l'autocorrélation. Elles diffèrent au plus de 16 %, et aucune conclusion n'en
+dépend.
 
 Une grille contenant des numéros supérieurs à 31 a donc exactement la même
 probabilité de gagner, mais quand elle gagne, elle partage avec moins de monde.
@@ -430,6 +454,31 @@ silence.
   colonne vide ; l'encodage « cp1252 » de deux archives n'était pas démontrable.
 - Déduplication dépendante d'un tri non stable, page non reproductible (date du
   jour inscrite dedans) : corrigés.
+
+**Septembre 2026, troisième relecture** (relecture externe, avec exécution du
+code).
+
+- Une précision ajoutée juste avant cette relecture affirmait que les
+  dernières marches de la dose n'étaient pas établies une à une, parce que
+  leurs intervalles se chevauchaient. La méthode était fausse : un
+  chevauchement ne dit rien de la différence. Testées directement, les 8
+  marches sont établies.
+- Le verdict de dose-effet ne vérifiait que l'ordre des estimations. Il repose
+  désormais sur un test de chaque marche.
+- « La ramène exactement sur χ² » : vrai seulement pour N grand, reformulé.
+- « 2,5 numéros attendus hors bande » : c'est 2,2 avec la bande exacte.
+- « Toute statistique mélangeant les régimes est fausse » : vrai pour les
+  étoiles et les rangs, pas pour les boules.
+- La correction pour tests multiples ne précisait pas quelle famille de tests
+  elle couvrait.
+- Trois défauts d'ingestion, sans effet sur les données actuelles : une archive
+  sans ligne de données plantait sans message clair ; un champ en trop sur une
+  ligne autre que la première était perdu en silence ; les bornes basses (un
+  numéro 0) n'étaient pas contrôlées.
+- « Archive la plus récente » désignait en fait la dernière par ordre
+  alphabétique. Elle est désormais définie par la date de son dernier tirage.
+- L'autocorrélation des résidus n'était pas prise en compte dans les
+  intervalles ; elle l'est désormais (voir plus haut).
 
 ## Licence et source
 

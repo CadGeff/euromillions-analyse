@@ -32,7 +32,7 @@ tirage reel (voir modele.py).
   b) Numero par numero (loi binomiale exacte)
      Bande a 95 %                    : 172 a 225 sorties
      Bande corrigee (50 comparaisons) : 156 a 243 sorties
-     Hors bande a 95 %      : 1 numero(s) [22]  (attendu par hasard : 2.5)
+     Hors bande a 95 %      : 1 numero(s) [22]  (attendu par hasard : 2.15)
      Hors bande corrigee    : 1 numero(s) [22]
      Le plus atypique : le 22, 155 sorties (sous-represente)
         p individuelle      : 0.00099
@@ -118,27 +118,43 @@ tirage reel (voir modele.py).
   le tirage (pente log-lineaire, effets fixes par regime, IC 95 %).
 
      combinaison   gagnants                   gain par grille
-     2+0  (rang 13)    +6.4 % [ +4.8 ;  +8.1]    -6.6 % [ -6.9 ;  -6.3]
-     3+0  (rang 10)   +10.9 % [ +9.3 ; +12.6]   -10.5 % [-11.0 ; -10.0]   <- reference
+     2+0  (rang 13)    +6.4 % [ +4.7 ;  +8.2]    -6.6 % [ -6.9 ;  -6.3]
+     3+0  (rang 10)   +10.9 % [ +9.2 ; +12.6]   -10.5 % [-11.0 ;  -9.9]   <- reference
      4+0  (rang  7)   +15.4 % [+13.5 ; +17.3]   -13.9 % [-14.7 ; -13.0]
      5+0  (rang  3)   +18.7 % [+15.6 ; +21.9]   -17.7 % [-20.0 ; -15.3]
-     2+1  (rang 12)    +6.1 % [ +4.5 ;  +7.7]    -6.3 % [ -6.9 ;  -5.6]
+     2+1  (rang 12)    +6.1 % [ +4.5 ;  +7.7]    -6.3 % [ -7.0 ;  -5.5]
      3+1  (rang  9)   +10.8 % [ +9.1 ; +12.6]   -10.5 % [-11.1 ;  -9.8]
-     4+1  (rang  5)   +15.4 % [+13.5 ; +17.4]   -13.9 % [-14.7 ; -13.1]
+     4+1  (rang  5)   +15.4 % [+13.5 ; +17.4]   -13.9 % [-14.8 ; -13.1]
      5+1  (rang  2)   non mesurable : 6 % de tirages sans gagnant
      1+2  (rang 11)    +1.1 % [ -0.6 ;  +2.9]    -1.6 % [ -2.7 ;  -0.5]   <- temoin
      2+2  (rang  8)    +5.5 % [ +3.7 ;  +7.4]    -5.9 % [ -6.8 ;  -4.9]
-     3+2  (rang  6)   +10.0 % [ +8.0 ; +12.0]    -9.4 % [-10.6 ;  -8.1]
+     3+2  (rang  6)   +10.0 % [ +8.0 ; +12.0]    -9.4 % [-10.7 ;  -8.0]
      4+2  (rang  4)   +14.4 % [+12.0 ; +16.8]   -13.0 % [-14.7 ; -11.2]
      5+2  (rang  1)   non mesurable : 77 % de tirages sans gagnant
 
-     0 etoile(s) : 2+0 +6.4 %  <  3+0 +10.9 %  <  4+0 +15.4 %  <  5+0 +18.7 %   -> coherent
-     1 etoile(s) : 2+1 +6.1 %  <  3+1 +10.8 %  <  4+1 +15.4 %   -> coherent
-     2 etoile(s) : 1+2 +1.1 %  <  2+2 +5.5 %  <  3+2 +10.0 %  <  4+2 +14.4 %   -> coherent
+     Intervalles calcules avec la plus grande de deux erreurs-types : HC0
+     et Newey-West (robuste a l'autocorrelation). Ecart maximal entre les
+     deux : +16 %.
+
+  Chaque marche est testee directement : effet des petites boules sur le
+  rapport entre deux combinaisons voisines, tirage par tirage. Comparer
+  deux intervalles de confiance ne suffirait pas.
+
+     0 etoile(s) :
+        2+0 -> 3+0   gagnants +4.6 % [+4.3 ; +4.9]   gain -4.1 % [-4.5 ; -3.7]   etablie
+        3+0 -> 4+0   gagnants +4.0 % [+3.6 ; +4.5]   gain -3.8 % [-4.2 ; -3.3]   etablie
+        4+0 -> 5+0   gagnants +3.1 % [+1.1 ; +5.1]   gain -4.4 % [-6.8 ; -2.0]   etablie
+     1 etoile(s) :
+        2+1 -> 3+1   gagnants +4.5 % [+4.2 ; +4.8]   gain -4.5 % [-4.8 ; -4.1]   etablie
+        3+1 -> 4+1   gagnants +4.2 % [+3.7 ; +4.6]   gain -3.9 % [-4.3 ; -3.4]   etablie
+     2 etoile(s) :
+        1+2 -> 2+2   gagnants +4.4 % [+4.1 ; +4.6]   gain -4.4 % [-4.7 ; -4.0]   etablie
+        2+2 -> 3+2   gagnants +4.2 % [+3.9 ; +4.5]   gain -3.7 % [-4.3 ; -3.1]   etablie
+        3+2 -> 4+2   gagnants +4.0 % [+3.1 ; +4.9]   gain -4.0 % [-5.0 ; -3.0]   etablie
 
   Le temoin 1+2, seule combinaison a n'exiger qu'une boule, varie de +1.1 %
   par petite boule [-0.6 ; +2.9] : un effet indiscernable de zero.
-  A etoiles egales, l'effet croit avec les boules exigees, pour les
+  A etoiles egales, l'effet croit a chaque boule exigee, pour les
   gagnants comme pour le gain : il vient des numeros que cochent
   les joueurs. Le nombre d'etoiles exigees, lui, n'y change presque rien.
 
@@ -150,7 +166,7 @@ tirage reel (voir modele.py).
 
 5. Le piege des tests multiples
 -------------------------------
-  5 tests ont ete menes sur les tirages. Un seuil a 5 % signifie
+  5 tests ont ete menes sur l'equite du tirage. Un seuil a 5 % signifie
   qu'un test sur vingt franchit la barre par pur hasard, meme quand
   rien n'est biaise. Sur 5 tests, la probabilite d'en voir au moins
   un 'significatif' par accident vaut environ 23 %.
@@ -163,6 +179,11 @@ tirage reel (voir modele.py).
      Etoiles 2004-2011                        p = 0.6305   au-dessus
      Etoiles 2011-2016                        p = 0.0255   sous 5 %, au-dessus du seuil corrige
      Etoiles 2016+                            p = 0.1681   au-dessus
+
+  Les correlations de popularite (section 4) forment une famille a
+  part : 13 combinaisons. Corrigee a son tour (seuil 0.0038), elle
+  ne change rien : toutes les combinaisons mesurees sur lesquelles
+  s'appuie la conclusion ont p <= 1e-07.
 
   Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :
   c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees

@@ -184,3 +184,58 @@ def test_ecarts_maximaux_refuse_un_tirage_incomplet():
     df = pd.DataFrame({"b1": [1, 2], "b2": [2, None]})
     with pytest.raises(ValueError, match="incomplet"):
         ecarts_maximaux(df, ["b1", "b2"], maximum=3)
+
+
+# --------------------------------------------------------------------------
+# Troisieme relecture : cas limites de l'ingestion et tests ajoutes
+# --------------------------------------------------------------------------
+
+
+def test_archive_sans_donnees_refusee(tmp_path):
+    chemin = tmp_path / "archive.csv"
+    chemin.write_bytes(b"a;b\n")
+    with pytest.raises(ValueError, match="sans aucune ligne"):
+        ingest.lire_archive(chemin)
+
+
+def test_champ_en_trop_sur_une_ligne_tardive_refuse(tmp_path):
+    """Un champ en trop sur la 2e ligne seulement etait perdu en silence :
+    le nombre de champs n'etait lu que sur la premiere."""
+    chemin = tmp_path / "archive.csv"
+    chemin.write_bytes(b"a;b\n1;2\n3;4;X\n")
+    with pytest.raises(ValueError, match="surnumeraire"):
+        ingest.lire_archive(chemin)
+
+
+def test_borne_basse_controlee():
+    tirages = pd.DataFrame({
+        "date_tirage": [pd.Timestamp("2020-01-03")],
+        "regime": [regles.REGIMES[-1].nom], "jour": ["VENDREDI"],
+        **{c: [v] for c, v in zip(ingest.COLONNES_BOULES, [0, 2, 3, 4, 5])},
+        **{c: [v] for c, v in zip(ingest.COLONNES_ETOILES, [1, 2])},
+        **{c: [np.nan] for c in ingest.COLONNES_GAGNANTS},
+    })
+    assert "HORS BORNES" in "\n".join(ingest.controler_regimes(tirages))
+
+
+def test_recence_des_archives_par_date_et_non_par_nom(tmp_path):
+    """'z_ancienne.csv' vient apres 'a_recente.csv' dans l'ordre alphabetique,
+    mais son dernier tirage est plus ancien : elle doit passer avant."""
+    (tmp_path / "z_ancienne.csv").write_bytes(b"date_de_tirage;x\n03/01/2020;1\n")
+    (tmp_path / "a_recente.csv").write_bytes(b"date_de_tirage;x\n03/01/2020;1\n07/01/2020;1\n")
+    brut, _ = ingest.charger_toutes(tmp_path)
+    ordre = brut.groupby("_source")["_ordre"].first()
+    assert ordre["a_recente.csv"] > ordre["z_ancienne.csv"]
+
+
+def test_esperance_exacte_hors_bande():
+    """La bande « a 95 % » exacte laisse sortir 4,3 % des numeros, pas 5 %."""
+    t = Tirage(K=50, B=5, N=1981)
+    assert 50 * t.part_hors_bande(t.bande(0.05)) == pytest.approx(2.154, abs=1e-3)
+
+
+def test_chaque_marche_de_la_dose_est_etablie():
+    import analyse
+    _, pop = analyse.popularite(analyse.charger())
+    assert pop["dose_effet"]
+    assert all(m["etablie"] for f in pop["familles"].values() for m in f["marches"])

@@ -160,7 +160,10 @@ def etudier_boules(df: pd.DataFrame) -> dict:
         "extreme": extreme,
         "bande": bande, "bande_corrigee": bande_corrigee,
         "hors_bande": hors, "hors_bande_corrigee": hors_corrigee,
-        "attendus_hors_bande": BOULES * SEUIL,
+        # Esperance EXACTE du nombre de numeros hors bande : avec une loi
+        # discrete, la bande « a 95 % » en laisse sortir un peu moins de 5 %.
+        "attendus_hors_bande": BOULES * t.part_hors_bande(bande),
+        "attendus_hors_bande_corrigee": BOULES * t.part_hors_bande(bande_corrigee),
         # Jusqu'ou le hasard pousse le numero de tete et celui de queue.
         "p_maximum": p_empirique(controle["maximums"], int(freq.max()), sens="haut"),
         "p_minimum": p_empirique(controle["minimums"], int(freq.min()), sens="bas"),
@@ -221,7 +224,14 @@ def effet_par_petit(valeurs: pd.Series, petits: pd.Series, regimes: pd.Series) -
     Les effets fixes par regime (centrage dans chaque regime) absorbent les
     changements de niveau dus aux regles ; le volume de grilles, qui ne depend
     pas des numeros tires, reste un bruit. L'intervalle de confiance utilise
-    une erreur-type robuste (HC0), sans supposer une variance constante.
+    une erreur-type robuste, sans supposer une variance constante (HC0).
+
+    Les residus sont autocorreles dans le temps (le volume de grilles varie
+    par periodes), ce que HC0 ne corrige pas. Mais le regresseur, le nombre de
+    petites boules d'un tirage, est independant d'un tirage a l'autre : les
+    termes croises de la variance s'annulent alors en esperance, et HC0 reste
+    valable en principe. On le verifie en calculant aussi l'erreur-type de
+    Newey-West (20 retards), et l'intervalle retient la plus grande des deux.
 
     Le logarithme exige des valeurs positives : ecarter les tirages a zero
     reviendrait a ne garder, au jackpot, que les tirages gagnes - precisement
@@ -239,10 +249,20 @@ def effet_par_petit(valeurs: pd.Series, petits: pd.Series, regimes: pd.Series) -
     pente = float((cadre["x"] * cadre["y"]).sum() / sxx)
     residus = cadre["y"] - pente * cadre["x"]
     erreur = float(np.sqrt((cadre["x"] ** 2 * residus ** 2).sum()) / sxx)
+    # Newey-West, en conservant l'ordre chronologique des tirages
+    u = (cadre["x"] * residus).to_numpy()
+    variance = float((u ** 2).sum())
+    for retard in range(1, 21):
+        variance += 2 * (1 - retard / 21) * float((u[retard:] * u[:-retard]).sum())
+    erreur_hac = float(np.sqrt(max(variance, 0.0)) / sxx)
+    rapport_hac = erreur_hac / erreur
+    # Par prudence, l'intervalle retient la plus grande des deux erreurs-types.
+    erreur = max(erreur, erreur_hac)
     return {
         "effet": float(np.expm1(pente)),
         "ic": [float(np.expm1(pente - 1.96 * erreur)), float(np.expm1(pente + 1.96 * erreur))],
         "tirages": int(connues.sum()),
+        "rapport_hac": rapport_hac,
         "part_zero": part_zero,
         "mesurable": part_zero < 0.01,
     }
@@ -298,6 +318,7 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             "effet_gain_haut": effet_r["ic"][1],
             "rho_gagnants": float(rho),
             "p_gagnants": float(valeur_p),
+            "rapport_hac": max(effet_g["rapport_hac"], effet_r["rapport_hac"]),
         })
     table = (pd.DataFrame(lignes)
              .sort_values(["etoiles_exigees", "boules_exigees"], kind="stable")
@@ -308,16 +329,36 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     table.loc[~table["mesurable"], colonnes_effet] = np.nan
 
     # Dose-effet : a etoiles egales, l'effet sur les gagnants doit croitre, et
-    # celui sur le gain decroitre, avec le nombre de boules exigees.
+    # celui sur le gain decroitre, avec le nombre de boules exigees. Chaque
+    # marche est TESTEE : comparer deux intervalles de confiance ne suffit pas
+    # (deux intervalles peuvent se chevaucher alors que la difference est
+    # nette), et les deux combinaisons viennent des memes tirages. On mesure
+    # donc directement l'effet des petites boules sur le RAPPORT entre les
+    # deux combinaisons, tirage par tirage.
+    def marche(bas: str, haut: str, colonne) -> dict:
+        combi = {c: tuple(int(v) for v in c.split("+")) for c in (bas, haut)}
+        a = pd.to_numeric(df[colonne(combi[bas])], errors="coerce")
+        b = pd.to_numeric(df[colonne(combi[haut])], errors="coerce")
+        rapport = (b / a).where((a > 0) & (b > 0))
+        return effet_par_petit(rapport, petits, df["regime"])
+
     familles = {}
     for etoiles, groupe in table[table["mesurable"]].groupby("etoiles_exigees"):
         suite = groupe.sort_values("boules_exigees")
+        noms = list(suite.index)
+        marches = []
+        for bas, haut in zip(noms, noms[1:]):
+            g, r = marche(bas, haut, colonne_gagnants), marche(bas, haut, colonne_rapport)
+            marches.append({"de": bas, "a": haut,
+                            "gagnants": g["effet"], "ic_gagnants": g["ic"],
+                            "gain": r["effet"], "ic_gain": r["ic"],
+                            "etablie": g["ic"][0] > 0 and r["ic"][1] < 0})
         familles[int(etoiles)] = {
-            "combinaisons": list(suite.index),
+            "combinaisons": noms,
             "effet_gagnants": [float(v) for v in suite["effet_gagnants"]],
             "effet_gain": [float(v) for v in suite["effet_gain"]],
-            "coherente": bool(suite["effet_gagnants"].is_monotonic_increasing
-                              and suite["effet_gain"].is_monotonic_decreasing),
+            "marches": marches,
+            "coherente": all(m["etablie"] for m in marches),
         }
 
     principale = libelle(PRINCIPALE)
@@ -351,6 +392,14 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         "temoin_nul": bool(temoin["effet_gagnants_bas"] <= 0 <= temoin["effet_gagnants_haut"]),
         "familles": familles,
         "dose_effet": bool(familles) and all(f["coherente"] for f in familles.values()),
+        # Les correlations de popularite forment une famille de tests a part,
+        # distincte des 5 tests sur l'equite du tirage. Corrigee pour ses 13
+        # comparaisons, elle ne doit rien changer aux combinaisons sur
+        # lesquelles s'appuient les conclusions (toutes sauf le temoin).
+        "comparaisons_popularite": len(table),
+        "p_max_retenues": float(table[table["mesurable"]]
+                                .drop(index=libelle(TEMOIN))["p_gagnants"].max()),
+        "rapport_hac_max": float(table.loc[table["mesurable"], "rapport_hac"].max()),
         "typique": typique,
         "haut": haut,
         "gagnants_vs_typique": float(medianes.loc[haut, "gagnants"] / medianes.loc[typique, "gagnants"] - 1),
@@ -457,7 +506,7 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
           f"     Bande corrigee (50 comparaisons) : {boules['bande_corrigee'][0]} a "
           f"{boules['bande_corrigee'][1]} sorties",
           f"     Hors bande a 95 %      : {len(boules['hors_bande'])} numero(s) "
-          f"{boules['hors_bande']}  (attendu par hasard : {boules['attendus_hors_bande']:.1f})",
+          f"{boules['hors_bande']}  (attendu par hasard : {boules['attendus_hors_bande']:.2f})",
           f"     Hors bande corrigee    : {len(boules['hors_bande_corrigee'])} numero(s) "
           f"{boules['hors_bande_corrigee']}",
           f"     Le plus atypique : le {ext['numero']}, {ext['sorties']} sorties "
@@ -550,12 +599,22 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
                  f"   {ligne['effet_gain'] * 100:+5.1f} % "
                  f"[{ligne['effet_gain_bas'] * 100:+5.1f} ; {ligne['effet_gain_haut'] * 100:+5.1f}]"
                  f"{marque}")
-    r.append("")
+    r += ["",
+          "     Intervalles calcules avec la plus grande de deux erreurs-types : HC0",
+          "     et Newey-West (robuste a l'autocorrelation). Ecart maximal entre les",
+          f"     deux : {(pop['rapport_hac_max'] - 1) * 100:+.0f} %.",
+          "",
+          "  Chaque marche est testee directement : effet des petites boules sur le",
+          "  rapport entre deux combinaisons voisines, tirage par tirage. Comparer",
+          "  deux intervalles de confiance ne suffirait pas.", ""]
     for etoiles_exigees, f in pop["familles"].items():
-        suite = "  <  ".join(f"{c} {v * 100:+.1f} %"
-                             for c, v in zip(f["combinaisons"], f["effet_gagnants"]))
-        r.append(f"     {etoiles_exigees} etoile(s) : {suite}   "
-                 f"-> {'coherent' if f['coherente'] else 'NON COHERENT'}")
+        r.append(f"     {etoiles_exigees} etoile(s) :")
+        for m in f["marches"]:
+            g, gi, a, ai = m["gagnants"], m["ic_gagnants"], m["gain"], m["ic_gain"]
+            r.append(f"        {m['de']} -> {m['a']}   gagnants {g * 100:+.1f} % "
+                     f"[{gi[0] * 100:+.1f} ; {gi[1] * 100:+.1f}]   gain {a * 100:+.1f} % "
+                     f"[{ai[0] * 100:+.1f} ; {ai[1] * 100:+.1f}]   "
+                     f"{'etablie' if m['etablie'] else 'NON ETABLIE'}")
     ic = pop["ic_temoin"]
     r += ["",
           f"  Le temoin {pop['temoin']}, seule combinaison a n'exiger qu'une boule, "
@@ -563,7 +622,7 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
           f"  par petite boule [{ic[0] * 100:+.1f} ; {ic[1] * 100:+.1f}] : "
           + ("un effet indiscernable de zero." if pop["temoin_nul"]
              else "un effet faible mais non nul."),
-          ("  A etoiles egales, l'effet croit avec les boules exigees, pour les"
+          ("  A etoiles egales, l'effet croit a chaque boule exigee, pour les"
            if pop["dose_effet"] else
            "  ATTENTION : la relation dose-effet n'est pas verifiee partout,"),
           ("  gagnants comme pour le gain : il vient des numeros que cochent"
@@ -581,7 +640,7 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
     m = famille
     titre = "5. Le piege des tests multiples"
     r += ["", titre, "-" * len(titre),
-          f"  {m['nombre']} tests ont ete menes sur les tirages. Un seuil a 5 % signifie",
+          f"  {m['nombre']} tests ont ete menes sur l'equite du tirage. Un seuil a 5 % signifie",
           "  qu'un test sur vingt franchit la barre par pur hasard, meme quand",
           f"  rien n'est biaise. Sur {m['nombre']} tests, la probabilite d'en voir au moins",
           f"  un 'significatif' par accident vaut environ {m['risque_global'] * 100:.0f} %.", "",
@@ -591,7 +650,16 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
         etat = "sous le seuil corrige" if essai["p"] < m["bonferroni"] else (
             "sous 5 %, au-dessus du seuil corrige" if essai["p"] < SEUIL else "au-dessus")
         r.append(f"     {essai['nom']:40s} p = {essai['p']:.4f}   {etat}")
+    bonf_pop = SEUIL / pop["comparaisons_popularite"]
     r += ["",
+          "  Les correlations de popularite (section 4) forment une famille a",
+          f"  part : {pop['comparaisons_popularite']} combinaisons. Corrigee a son tour "
+          f"(seuil {bonf_pop:.4f}), elle",
+          "  " + ("ne change rien : toutes les combinaisons mesurees sur lesquelles"
+                 if pop["p_max_retenues"] < bonf_pop else
+                 "ATTENTION : une combinaison retenue ne passe pas le seuil corrige."),
+          ("  s'appuie la conclusion ont p <= " + f"{pop['p_max_retenues']:.0e}."
+           if pop["p_max_retenues"] < bonf_pop else ""), "",
           "  Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :",
           "  c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees",
           "  pratiquement identiques.", ""]

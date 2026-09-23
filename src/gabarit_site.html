@@ -572,8 +572,9 @@
                     `avec ${nb(dehors95[0].sorties)} sorties. `
       : `${n95} numéros sortent de la bande à 95 % : <b>${liste(dehors95.map(f => f.numero))}</b>. `;
     const compare = n95 < ref.attendus_hors_bande ? "moins" : n95 > ref.attendus_hors_bande ? "plus" : "autant";
-    phrase += `Or en examinant 50 numéros à un seuil de 5 %, on s'attend à en voir ` +
-              `<b>${fr(ref.attendus_hors_bande)}</b> sortir par pur hasard : il y en a <i>${compare}</i> que prévu. `;
+    phrase += `Or un tirage équilibré en fait sortir <b>${fr(ref.attendus_hors_bande.toFixed(1))}</b> ` +
+              `en moyenne sur 50 (un peu moins de 5 % chacun, la loi étant discrète) : ` +
+              `il y en a <i>${compare}</i> que prévu. `;
     if (dehorsCorr.length) {
       const hors = dehorsCorr.find(f => f.numero === ext.numero) ? `Le ${ext.numero}` :
         liste(dehorsCorr.map(f => f.numero));
@@ -910,8 +911,10 @@
       `Variation du nombre de gagnants pour chaque boule ≤ 31 de plus dans le tirage, ` +
       `avec son intervalle de confiance à 95 %. ` +
       (po.dose_effet
-        ? `Dans chaque famille, l'effet croît avec le nombre de boules exigées, et les trois ` +
-          `familles se superposent presque : le nombre d'étoiles exigées n'y change pratiquement rien. `
+        ? `Dans chaque famille, l'effet croît à chaque boule exigée : chacune des ` +
+          `${po.marches} marches est testée directement, tirage par tirage, et toutes sont établies. ` +
+          `Les trois familles se superposent presque : le nombre d'étoiles exigées n'y change ` +
+          `pratiquement rien. `
         : `Attention : l'effet ne croît pas partout avec le nombre de boules exigées. `) +
       (exclues.length
         ? `Non mesurées, faute de gagnants assez réguliers : ` +

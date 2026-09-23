@@ -23,7 +23,10 @@ pas chi2(K-1) ici. La covariance entre les effectifs de deux numeros vaut
 -N p(1-p) / (K-1) : la matrice de covariance est celle d'une loi multinomiale
 multipliee par (K-B)/(K-1). La statistique brute suit donc, pour N grand,
 (K-B)/(K-1) x chi2(K-1) - pas seulement en moyenne, en loi. La multiplier par
-(K-1)/(K-B) la ramene exactement sur chi2(K-1).
+(K-1)/(K-B) la ramene donc sur chi2(K-1) quand N est grand. Pour N fini, ce
+n'est qu'une approximation : avec N = 20, la loi s'en ecarte nettement.
+`verifier()` la confronte a la simulation pour le N reel (1 981 tirages :
+p = 0,187 par la loi, 0,185 par simulation).
 
 Deux approximations ont egalement ete retirees des bandes de variation :
 l'approximation normale de la loi binomiale, fausse en queue de distribution
@@ -114,6 +117,14 @@ class Tirage:
         valeurs = np.arange(self.N + 1)
         retenues = valeurs[self.p_individuelle(valeurs) >= seuil]
         return int(retenues.min()), int(retenues.max())
+
+    def part_hors_bande(self, bande: tuple[int, int]) -> float:
+        """Probabilite exacte qu'un numero sorte de la bande sous l'hypothese
+        nulle. Loi discrete oblige, elle est inferieure au risque nominal :
+        un peu plus de 4,3 % pour la bande « a 95 % », pas 5 %."""
+        bas, haut = bande
+        return float(stats.binom.cdf(bas - 1, self.N, self.p)
+                     + stats.binom.sf(haut, self.N, self.p))
 
     def test_ajustement(self, effectifs: np.ndarray) -> dict:
         """Test d'equiprobabilite, avec la correction du modele sans remise."""

@@ -205,25 +205,31 @@ def lire_archive(chemin: Path, ordre: int = 0) -> tuple[pd.DataFrame, Source]:
     chevauchent.
 
     On construit donc la liste des noms nous-memes, on nomme explicitement
-    les champs surnumeraires, on force index_col=False, puis on verifie que
-    ces champs sont bien vides avant de les retirer.
+    les champs surnumeraires (d'apres la ligne la plus longue du fichier, pas
+    seulement la premiere), on force index_col=False, puis on verifie que ces
+    champs sont vides sur toutes les lignes avant de les retirer.
     """
     octets = chemin.read_bytes()
     codec, etiquette = detecter_encodage(octets)
     texte = octets.decode(codec)
     non_ascii = "".join(sorted({c for c in texte if ord(c) > 127}))
 
-    lignes = texte.splitlines()
+    lignes = [ligne for ligne in texte.splitlines() if ligne.strip()]
+    if len(lignes) < 2:
+        raise ValueError(f"{chemin.name} : archive vide ou sans aucune ligne de donnees")
     entete = lignes[0].split(SEPARATEUR)
-    premiere = lignes[1].split(SEPARATEUR)
+    donnees = [ligne.split(SEPARATEUR) for ligne in lignes[1:]]
 
     sep_entete = entete[-1].strip() == ""
-    sep_lignes = premiere[-1].strip() == ""
+    sep_lignes = all(champs[-1].strip() == "" for champs in donnees)
     noms = [n for n in entete if n.strip()]
     if len(noms) != len(entete) - int(sep_entete):
         raise ValueError(f"{chemin.name} : nom de colonne vide au milieu de l'en-tete")
 
-    surnumeraires = len(premiere) - len(noms)
+    # Le nombre de champs se lit sur TOUTES les lignes, pas sur la premiere :
+    # une ligne plus longue que les autres serait sinon tronquee par pandas,
+    # avec un simple avertissement, et son dernier champ perdu.
+    surnumeraires = max(len(champs) for champs in donnees) - len(noms)
     if surnumeraires < 0:
         raise ValueError(f"{chemin.name} : moins de champs que de noms de colonnes")
     vides = [f"_champ_vide_{i + 1}" for i in range(surnumeraires)]
@@ -235,7 +241,8 @@ def lire_archive(chemin: Path, ordre: int = 0) -> tuple[pd.DataFrame, Source]:
         dtype=str,
         keep_default_na=False,
         engine="python",
-        header=0,
+        header=None,
+        skiprows=1,
         names=noms + vides,
         index_col=False,
     )
@@ -260,10 +267,19 @@ def charger_toutes(dossier: Path) -> tuple[pd.DataFrame, list[Source]]:
         raise FileNotFoundError(f"Aucun CSV trouve dans {dossier}")
 
     cadres, sources = [], []
-    for ordre, chemin in enumerate(fichiers):
-        df, source = lire_archive(chemin, ordre)
+    for chemin in fichiers:
+        df, source = lire_archive(chemin)
         cadres.append(df)
         sources.append(source)
+
+    # Ordre de recence des archives : celle dont le dernier tirage est le plus
+    # recent passe en dernier. Le nom de fichier ne dit rien de fiable a ce
+    # sujet ('euromillions_4.csv' est anterieur a 'euromillions_201902.csv').
+    fins = [df["date_de_tirage"].map(parser_date).max() for df in cadres]
+    rang = sorted(range(len(cadres)), key=lambda i: (fins[i], fichiers[i].name))
+    for ordre, i in enumerate(rang):
+        cadres[i]["_ordre"] = ordre
+        sources[i].ordre = ordre
 
     # concat tolerant : les colonnes absentes d'une archive deviennent vides
     complet = pd.concat(cadres, ignore_index=True, sort=False)
@@ -348,8 +364,9 @@ def dedupliquer(tirages: pd.DataFrame) -> pd.DataFrame:
     """Une ligne par date, en gardant la plus complete.
 
     Les archives peuvent se chevaucher. A date egale, on prefere la ligne dont
-    les chiffres de gagnants sont publies, puis l'archive la plus recente (la
-    FDJ y corrige ses erreurs). Le choix ne depend ainsi ni de l'ordre de
+    les chiffres de gagnants sont publies, puis l'archive la plus recente,
+    c'est-a-dire celle dont le dernier tirage est le plus tardif (la FDJ y
+    corrige ses erreurs). Le choix ne depend ainsi ni de l'ordre de
     lecture ni d'un tri instable.
     """
     priorite = tirages.assign(_publie=~tirages["gagnants_non_publies"])
@@ -534,8 +551,8 @@ def controler_regimes(df: pd.DataFrame) -> list[str]:
         bmax = int(bloc[COLONNES_BOULES].max().max())
         emin = int(bloc[COLONNES_ETOILES].min().min())
         emax = int(bloc[COLONNES_ETOILES].max().max())
-        alerte_b = "" if bmax <= 50 else "  <-- HORS BORNES"
-        alerte_e = "" if emax <= regime.etoiles else "  <-- HORS BORNES"
+        alerte_b = "" if 1 <= bmin and bmax <= 50 else "  <-- HORS BORNES"
+        alerte_e = "" if 1 <= emin and emax <= regime.etoiles else "  <-- HORS BORNES"
         lignes.append(f"  {regime.nom}")
         lignes.append(f"      {len(bloc):4d} tirages   boules {bmin}-{bmax} "
                       f"(attendu 1-50){alerte_b}")
