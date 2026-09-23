@@ -375,8 +375,11 @@ dans le tirage (pente log-linéaire, avec un niveau propre à chaque régime) :
 | 5 | +18,7 % | non mesurable | non mesurable |
 
 L'effet croît à chaque boule exigée, et le nombre d'étoiles n'y change presque
-rien. La seule combinaison qui n'exige qu'une boule, 1+2, sert de témoin : son
-effet ne se distingue pas de zéro. Le gain par grille suit exactement le même
+rien. La tendance d'ensemble est nette ; les dernières marches, prises une à
+une, le sont moins : sans étoile, les intervalles à 4 et 5 boules se
+chevauchent, et avec deux étoiles ceux à 3 et 4 boules se touchent. La seule
+combinaison qui n'exige qu'une boule, 1+2, sert de témoin : son effet ne se
+distingue pas de zéro. Le gain par grille suit exactement le même
 schéma en sens inverse : −6,6 %, −10,5 %, −13,9 % et −17,7 % par petite boule
 pour 2, 3, 4 et 5 bons numéros sans étoile. 5+1 et 5+2 ne sont pas mesurés : 6 %
 et 77 % de leurs tirages n'ont aucun gagnant, et une pente calculée sur les
