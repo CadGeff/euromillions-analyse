@@ -80,8 +80,17 @@ class Tirage:
     def p_individuelle(self, sorties: np.ndarray | int) -> np.ndarray | float:
         """p-value bilaterale exacte d'un effectif, sous la loi B(N, B/K).
 
-        Deux fois la plus petite des deux queues, bornee a 1 : la convention
-        usuelle pour une loi discrete et asymetrique.
+        Methode du doublement : min(1, 2 x min(queue basse, queue haute)).
+        C'est une convention parmi d'autres pour une loi discrete asymetrique.
+        La methode de Fisher (scipy.stats.binomtest) somme les probabilites
+        des effectifs au plus aussi probables que l'observe ; pour le 22
+        (155 sorties), elle donne 0,00097 contre 0,00099 ici. Le doublement
+        n'est pas systematiquement plus prudent : selon l'effectif, il donne
+        une valeur plus grande ou plus petite que Fisher.
+
+        Le choix est sans consequence sur le test du numero le plus atypique :
+        sa p-value vient de la simulation, qui applique la meme convention aux
+        historiques simules et aux donnees reelles (voir verifier).
         """
         sorties = np.asarray(sorties)
         bas = stats.binom.cdf(sorties, self.N, self.p)

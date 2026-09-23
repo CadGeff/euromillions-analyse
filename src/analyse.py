@@ -34,7 +34,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from modele import SEUIL, Tirage, p_empirique, simuler_absences, verifier
+from modele import (SEUIL, Tirage, p_empirique, plus_longues_absences,
+                    simuler_absences, verifier)
 from regles import (
     BOULES,
     BOULES_TIREES,
@@ -98,24 +99,29 @@ def extremes(effectifs: pd.Series, n: int = 3, en_tete: bool = True) -> pd.Serie
 def ecarts_maximaux(df: pd.DataFrame, colonnes: list[str], maximum: int) -> pd.DataFrame:
     """Plus longue absence observee pour chaque numero, en nombre de tirages.
 
-    Les series de debut et de fin d'historique comptent (la simulation de
-    reference les compte de la meme facon). `absence_finale` decrit l'etat au
-    dernier tirage du jeu de donnees, et non la situation du jour.
+    Mesuree par modele.plus_longues_absences, la fonction qui mesure aussi les
+    historiques simules : observation et reference sont calculees par le meme
+    code, avec la meme convention (les series de debut et de fin d'historique
+    comptent). `absence_finale` decrit l'etat au dernier tirage du jeu de
+    donnees, et non la situation du jour.
     """
-    presence = pd.DataFrame(False, index=df.index, columns=range(1, maximum + 1))
-    for colonne in colonnes:
-        for position, valeur in df[colonne].dropna().astype(int).items():
-            presence.at[position, valeur] = True
+    numeros = df[colonnes]
+    if numeros.isna().any().any():
+        raise ValueError("Tirage incomplet : une boule manque, les absences seraient fausses")
+    presence = np.zeros((len(df), maximum), dtype=bool)
+    # Numeros 1..maximum -> colonnes 0..maximum-1
+    np.put_along_axis(presence, numeros.to_numpy(dtype=int) - 1, True, axis=1)
 
-    resultats = []
-    for numero in presence.columns:
-        record = courant = 0
-        for sorti in presence[numero].values:
-            courant = 0 if sorti else courant + 1
-            record = max(record, courant)
-        resultats.append({"numero": numero, "absence_max": record,
-                          "absence_finale": courant})
-    return pd.DataFrame(resultats).set_index("numero")
+    finales = np.empty(maximum, dtype=int)
+    for k in range(maximum):
+        sorties = np.flatnonzero(presence[:, k])
+        finales[k] = len(df) - 1 - sorties[-1] if sorties.size else len(df)
+
+    return pd.DataFrame({
+        "numero": range(1, maximum + 1),
+        "absence_max": plus_longues_absences(presence),
+        "absence_finale": finales,
+    }).set_index("numero")
 
 
 # --------------------------------------------------------------------------

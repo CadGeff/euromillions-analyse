@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import ingest  # noqa: E402
 import regles  # noqa: E402
+from analyse import ecarts_maximaux  # noqa: E402
 from modele import Tirage, plus_longues_absences  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -167,3 +168,19 @@ def test_plus_longues_absences():
     presence = np.array([[0, 1], [0, 0], [1, 0], [0, 0], [0, 1]], dtype=bool)
     # colonne 0 : 2 tirages avant la sortie, 2 apres ; colonne 1 : 3 entre deux sorties
     assert plus_longues_absences(presence).tolist() == [2, 3]
+
+
+def test_ecarts_maximaux_absence_en_cours():
+    """3 tirages de 2 boules parmi 3 numeros : le 3 ne sort jamais, le 1
+    sort au dernier tirage."""
+    df = pd.DataFrame({"b1": [1, 2, 2], "b2": [2, 1, 1]})
+    res = ecarts_maximaux(df, ["b1", "b2"], maximum=3)
+    assert res.loc[3, "absence_max"] == 3 and res.loc[3, "absence_finale"] == 3
+    assert res.loc[1, "absence_finale"] == 0
+    assert res.loc[2, "absence_max"] == 0
+
+
+def test_ecarts_maximaux_refuse_un_tirage_incomplet():
+    df = pd.DataFrame({"b1": [1, 2], "b2": [2, None]})
+    with pytest.raises(ValueError, match="incomplet"):
+        ecarts_maximaux(df, ["b1", "b2"], maximum=3)
