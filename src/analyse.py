@@ -4,16 +4,20 @@ Analyse statistique des tirages EuroMillions normalises.
 Quatre questions, dans l'ordre ou elles meritent d'etre posees :
 
   1. Quels numeros sortent le plus ? (la question que tout le monde pose)
-  2. Cet ecart depasse-t-il ce que le hasard produit seul ? (test d'ajustement)
+  2. Ces ecarts depassent-ils ce que le hasard produit seul ? (tests)
   3. Combien de temps un numero peut-il rester absent sans que ce soit anormal ?
   4. Puisqu'on ne peut pas gagner plus souvent, peut-on gagner davantage ?
 
-Les trois premieres concluent a l'absence de tout signal. La quatrieme est le
-seul angle ou la statistique a quelque chose d'utile a dire, et il ne porte pas
-sur la probabilite de gagner mais sur le montant du gain.
+Les trois premieres ne trouvent aucun signal qui resiste a la correction pour
+tests multiples. La quatrieme est le seul angle ou la statistique a quelque
+chose d'utile a dire, et il ne porte pas sur la probabilite de gagner mais sur
+le montant du gain.
 
-Le modele probabiliste et sa verification par simulation vivent dans modele.py.
-Voir son en-tete pour l'erreur qui a rendu ce module necessaire.
+Toutes les phrases de conclusion sont choisies d'apres les resultats : si les
+donnees changent, le texte change avec elles.
+
+Le modele probabiliste et sa verification par simulation vivent dans modele.py,
+les regles du jeu dans regles.py.
 
 Entree  : data/processed/euromillions_tirages.csv
 Sortie  : data/processed/statistiques.txt
@@ -26,36 +30,35 @@ from __future__ import annotations
 from math import comb
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from scipy import stats
 
-from modele import SEUIL, Tirage, p_empirique, verifier
+from modele import SEUIL, Tirage, p_empirique, simuler_absences, verifier
+from regles import (
+    BOULES,
+    BOULES_TIREES,
+    COMBINAISONS,
+    ETOILES_TIREES,
+    REGIMES,
+    colonne_gagnants,
+    colonne_rapport,
+    rang_actuel,
+)
 
 RACINE = Path(__file__).resolve().parents[1]
 DOSSIER = RACINE / "data" / "processed"
 
 COLONNES_BOULES = [f"boule_{i}" for i in range(1, 6)]
 COLONNES_ETOILES = [f"etoile_{i}" for i in range(1, 3)]
-
-ETOILES_PAR_REGIME = {
-    "2004-2011 : 50 boules / 9 etoiles": 9,
-    "2011-2016 : 50 boules / 11 etoiles": 11,
-    "2016+ : 50 boules / 12 etoiles": 12,
-}
-BOULES_MAX = 50
-BOULES_TIREES = 5
 SEUIL_DATES = 31  # au-dela, un numero ne peut pas etre une date de naissance
 
-# Rangs et nombre de boules principales exigees. Le contraste entre rangs est
-# ce qui rend la mesure de popularite credible : un rang exigeant beaucoup de
-# boules doit reagir fortement, un rang qui n'en exige qu'une ne doit pas.
-RANGS = {
-    1: (5, 2), 2: (5, 1), 3: (5, 0), 4: (4, 2), 5: (4, 1), 6: (3, 2),
-    7: (4, 0), 8: (2, 2), 9: (3, 1), 10: (3, 0), 11: (1, 2), 12: (2, 1),
-    13: (2, 0),
-}
-RANG_PRINCIPAL = 10   # 3 boules, 0 etoile : sensible aux numeros, beaucoup de gagnants
-RANG_TEMOIN = 11      # 1 boule, 2 etoiles : presque insensible aux numeros
+# Combinaison de reference : 3 boules et aucune etoile. Elle depend des numeros
+# principaux sans que la popularite des etoiles vienne brouiller la mesure, et
+# elle compte des dizaines de milliers de gagnants par tirage.
+PRINCIPALE = (3, 0)
+# Temoin : la seule combinaison qui n'exige qu'une boule principale.
+TEMOIN = (1, 2)
 
 
 # --------------------------------------------------------------------------
@@ -66,12 +69,15 @@ def charger() -> pd.DataFrame:
 
     Le tri est reimpose ici plutot que suppose. Les calculs d'absence lisent la
     serie dans l'ordre des lignes : un fichier ecrit a l'envers donnerait des
-    resultats faux sans lever la moindre erreur, et l'ordre d'un CSV n'est pas
-    une garantie sur laquelle s'appuyer a distance.
+    resultats faux sans lever la moindre erreur.
     """
     df = pd.read_csv(DOSSIER / "euromillions_tirages.csv", sep=";",
                      parse_dates=["date_tirage"])
-    return df.sort_values("date_tirage").reset_index(drop=True)
+    return df.sort_values("date_tirage", kind="stable").reset_index(drop=True)
+
+
+def libelle(combinaison: tuple[int, int]) -> str:
+    return f"{combinaison[0]}+{combinaison[1]}"
 
 
 def frequences(df: pd.DataFrame, colonnes: list[str], maximum: int) -> pd.Series:
@@ -80,13 +86,21 @@ def frequences(df: pd.DataFrame, colonnes: list[str], maximum: int) -> pd.Series
     return tirees.value_counts().reindex(range(1, maximum + 1), fill_value=0).sort_index()
 
 
+def extremes(effectifs: pd.Series, n: int = 3, en_tete: bool = True) -> pd.Series:
+    """Les n premiers (ou derniers), ex aequo compris : couper au milieu d'une
+    egalite designerait arbitrairement un numero plutot qu'un autre."""
+    ordonnes = effectifs.sort_values(ascending=not en_tete, kind="stable")
+    limite = ordonnes.iloc[min(n, len(ordonnes)) - 1]
+    garde = ordonnes >= limite if en_tete else ordonnes <= limite
+    return ordonnes[garde]
+
+
 def ecarts_maximaux(df: pd.DataFrame, colonnes: list[str], maximum: int) -> pd.DataFrame:
     """Plus longue absence observee pour chaque numero, en nombre de tirages.
 
-    Sert a repondre a l'intuition du « numero en retard » : si les absences
-    longues sont la norme, en voir une ne veut rien dire. La colonne
-    `absence_finale` decrit l'etat au dernier tirage du jeu de donnees, et non
-    la situation du jour.
+    Les series de debut et de fin d'historique comptent (la simulation de
+    reference les compte de la meme facon). `absence_finale` decrit l'etat au
+    dernier tirage du jeu de donnees, et non la situation du jour.
     """
     presence = pd.DataFrame(False, index=df.index, columns=range(1, maximum + 1))
     for colonne in colonnes:
@@ -104,277 +118,537 @@ def ecarts_maximaux(df: pd.DataFrame, colonnes: list[str], maximum: int) -> pd.D
     return pd.DataFrame(resultats).set_index("numero")
 
 
+# --------------------------------------------------------------------------
+# Les boules : ajustement global et numero le plus atypique
+# --------------------------------------------------------------------------
+
+
+def etudier_boules(df: pd.DataFrame) -> dict:
+    t = Tirage(K=BOULES, B=BOULES_TIREES, N=len(df))
+    freq = frequences(df, COLONNES_BOULES, BOULES)
+    controle = verifier(t)
+    test = t.test_ajustement(freq.values)
+    test["p_simulee"] = p_empirique(controle["distribution"], test["khi2_brut"])
+
+    # Le numero le plus atypique, jauge contre la loi du plus atypique des 50
+    # dans un historique equilibre : c'est la bonne question, car il y a
+    # toujours un numero en tete et un en queue.
+    p_indiv = pd.Series(t.p_individuelle(freq.values), index=freq.index)
+    atypique = int(p_indiv.idxmin())
+    extreme = {
+        "numero": atypique,
+        "sorties": int(freq[atypique]),
+        "sens": "sous" if freq[atypique] < t.attendu else "sur",
+        "p_individuelle": float(p_indiv[atypique]),
+        "p_bonferroni": float(min(1.0, p_indiv[atypique] * BOULES)),
+        "p": p_empirique(controle["p_minimales"], float(p_indiv[atypique]), sens="bas"),
+    }
+
+    bande = t.bande(SEUIL)
+    bande_corrigee = t.bande(SEUIL, comparaisons=BOULES)
+    hors = [int(n) for n, c in freq.items() if not bande[0] <= c <= bande[1]]
+    hors_corrigee = [int(n) for n, c in freq.items()
+                     if not bande_corrigee[0] <= c <= bande_corrigee[1]]
+    return {
+        "tirage": t, "freq": freq, "controle": controle, "test": test,
+        "extreme": extreme,
+        "bande": bande, "bande_corrigee": bande_corrigee,
+        "hors_bande": hors, "hors_bande_corrigee": hors_corrigee,
+        "attendus_hors_bande": BOULES * SEUIL,
+        # Jusqu'ou le hasard pousse le numero de tete et celui de queue.
+        "p_maximum": p_empirique(controle["maximums"], int(freq.max()), sens="haut"),
+        "p_minimum": p_empirique(controle["minimums"], int(freq.min()), sens="bas"),
+        "percentile_khi2": float(stats.chi2.cdf(test["khi2"], test["ddl"])),
+    }
+
+
+def etudier_etoiles(df: pd.DataFrame) -> list[dict]:
+    resultats = []
+    for regime in REGIMES:
+        bloc = df[df["regime"] == regime.nom]
+        if bloc.empty:
+            continue
+        t = Tirage(K=regime.etoiles, B=ETOILES_TIREES, N=len(bloc))
+        freq = frequences(bloc, COLONNES_ETOILES, regime.etoiles)
+        controle = verifier(t)
+        test = t.test_ajustement(freq.values)
+        test["p_simulee"] = p_empirique(controle["distribution"], test["khi2_brut"])
+        resultats.append({"regime": regime, "tirage": t, "freq": freq, "test": test})
+    return resultats
+
+
+# --------------------------------------------------------------------------
+# Les absences, avec leur reference simulee
+# --------------------------------------------------------------------------
+
+
+def etudier_absences(df: pd.DataFrame) -> dict:
+    ecarts = ecarts_maximaux(df, COLONNES_BOULES, BOULES)
+    reference = simuler_absences(Tirage(K=BOULES, B=BOULES_TIREES, N=len(df)))
+    record = int(ecarts["absence_max"].max())
+    mediane = float(ecarts["absence_max"].median())
+    return {
+        "ecarts": ecarts,
+        "record": record,
+        "numero_record": int(ecarts["absence_max"].idxmax()),
+        "mediane": mediane,
+        "finale": int(ecarts["absence_finale"].max()),
+        "numero_finale": int(ecarts["absence_finale"].idxmax()),
+        "record_simule_mediane": float(np.median(reference["record"])),
+        "record_simule_ic": [float(v) for v in np.percentile(reference["record"], [2.5, 97.5])],
+        "p_record": p_empirique(reference["record"], record, sens="haut"),
+        "mediane_simulee": float(np.median(reference["mediane"])),
+        "mediane_simulee_ic": [float(v) for v in np.percentile(reference["mediane"], [2.5, 97.5])],
+        "repetitions": len(reference["record"]),
+    }
+
+
+# --------------------------------------------------------------------------
+# La popularite des numeros aupres des joueurs
+# --------------------------------------------------------------------------
+
+
+def effet_par_petit(valeurs: pd.Series, petits: pd.Series, regimes: pd.Series) -> dict:
+    """Variation relative de `valeurs` pour chaque boule <= 31 de plus dans le
+    tirage : pente de log(valeurs) sur le nombre de petites boules.
+
+    Les effets fixes par regime (centrage dans chaque regime) absorbent les
+    changements de niveau dus aux regles ; le volume de grilles, qui ne depend
+    pas des numeros tires, reste un bruit. L'intervalle de confiance utilise
+    une erreur-type robuste (HC0), sans supposer une variance constante.
+
+    Le logarithme exige des valeurs positives : ecarter les tirages a zero
+    reviendrait a ne garder, au jackpot, que les tirages gagnes - precisement
+    les plus joues. Une combinaison n'est donc mesuree que si les tirages a
+    zero y sont negligeables (moins de 1 %).
+    """
+    connues = valeurs.notna()
+    part_zero = float((valeurs[connues] == 0).mean())
+    garde = connues & (valeurs > 0)
+    cadre = pd.DataFrame({"y": np.log(valeurs[garde].astype(float)),
+                          "x": petits[garde].astype(float), "g": regimes[garde]})
+    cadre["y"] -= cadre.groupby("g")["y"].transform("mean")
+    cadre["x"] -= cadre.groupby("g")["x"].transform("mean")
+    sxx = float((cadre["x"] ** 2).sum())
+    pente = float((cadre["x"] * cadre["y"]).sum() / sxx)
+    residus = cadre["y"] - pente * cadre["x"]
+    erreur = float(np.sqrt((cadre["x"] ** 2 * residus ** 2).sum()) / sxx)
+    return {
+        "effet": float(np.expm1(pente)),
+        "ic": [float(np.expm1(pente - 1.96 * erreur)), float(np.expm1(pente + 1.96 * erreur))],
+        "tirages": int(connues.sum()),
+        "part_zero": part_zero,
+        "mesurable": part_zero < 0.01,
+    }
+
+
 def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """Mesure les habitudes des JOUEURS a partir du nombre de gagnants.
+    """Mesure les habitudes des JOUEURS a partir des gagnants et des gains.
 
-    Le raisonnement sur les dates de naissance etait jusqu'ici une affirmation
-    empruntee : les donnees montraient que les boules ignorent la zone 1-31,
-    pas que les joueurs la privilegient. Le nombre de gagnants permet de le
-    demontrer avec les seules archives FDJ.
+    A une combinaison donnee, le nombre de gagnants vaut approximativement
+    (grilles jouees) x (probabilite qu'une grille corresponde). Le second
+    facteur depend des numeros que les joueurs cochent : si les joueurs
+    privilegient 1-31, un tirage riche en petits numeros produit plus de
+    gagnants. Et comme chaque rang partage une cagnotte proportionnelle aux
+    mises, le gain par grille baisse d'autant : c'est lui, et non le nombre
+    de gagnants, qui interesse le joueur.
 
-    L'idee : a un rang donne, le nombre de gagnants vaut approximativement
-    (nombre de grilles jouees) x (probabilite qu'une grille corresponde). Le
-    second facteur depend des numeros que les joueurs cochent. Si les joueurs
-    privilegient 1-31, alors un tirage riche en petits numeros produit plus de
-    gagnants.
+    Le volume de grilles varie fortement (taille du jackpot, jour, epoque),
+    mais il ne depend pas des numeros qui vont sortir : c'est du bruit, qui
+    affaiblit les mesures, pas un facteur de confusion qui les creerait.
 
-    Le volume de grilles varie fortement (taille du jackpot, jour de la
-    semaine) mais il ne depend pas des numeros qui vont sortir : c'est du
-    bruit, pas un facteur de confusion.
-
-    Le temoin rend la demonstration solide : le rang 11 n'exige qu'UNE boule
-    principale, il ne doit donc presque pas reagir. S'il reagissait autant que
-    les autres, l'effet viendrait d'ailleurs.
+    La demonstration repose sur une relation dose-effet : plus une combinaison
+    exige de boules principales, plus elle doit reagir. On la mesure par la
+    TAILLE de l'effet (variation par petite boule supplementaire), et non par
+    une correlation de rang : rho melange taille de l'effet et bruit, et le
+    bruit depend du nombre de gagnants et des etoiles exigees.
     """
     petits = (df[COLONNES_BOULES] <= SEUIL_DATES).sum(axis=1)
 
     lignes = []
-    for rang, (boules, etoiles) in RANGS.items():
-        colonne = f"gagnants_rang{rang}"
-        if colonne not in df:
+    for combinaison in COMBINAISONS:
+        gagnants = pd.to_numeric(df[colonne_gagnants(combinaison)], errors="coerce")
+        gains = pd.to_numeric(df[colonne_rapport(combinaison)], errors="coerce")
+        if gagnants.notna().sum() < 200:
             continue
-        gagnants = pd.to_numeric(df[colonne], errors="coerce")
-        # On ne retient que les valeurs manquantes. Ecarter les tirages a zero
-        # gagnant reviendrait a conditionner sur la variable expliquee : au
-        # rang 1, le jackpot n'est remporte qu'une fois sur quatre, et ne
-        # garder que ces tirages-la selectionne precisement les combinaisons
-        # les plus jouees. Un zero est une observation, pas un defaut.
+        effet_g = effet_par_petit(gagnants, petits, df["regime"])
+        effet_r = effet_par_petit(gains, petits, df["regime"])
         valides = gagnants.notna()
-        if valides.sum() < 200:
-            continue
         rho, valeur_p = stats.spearmanr(petits[valides], gagnants[valides])
         lignes.append({
-            "rang": rang,
-            "boules_exigees": boules,
-            "etoiles_exigees": etoiles,
-            "tirages": int(valides.sum()),
-            # Part de tirages sans aucun gagnant : au rang 1 elle depasse 75 %,
-            # ce qui ecrase la correlation faute de valeurs a ordonner.
-            "part_sans_gagnant": float((gagnants[valides] == 0).mean()),
-            "rho": rho,
-            "p": valeur_p,
+            "combinaison": libelle(combinaison),
+            "boules_exigees": combinaison[0],
+            "etoiles_exigees": combinaison[1],
+            "rang_actuel": rang_actuel(combinaison),
+            "tirages": effet_g["tirages"],
+            "gagnants_medians": float(gagnants[valides].median()),
+            "part_sans_gagnant": effet_g["part_zero"],
+            "mesurable": effet_g["mesurable"] and effet_r["mesurable"],
+            "effet_gagnants": effet_g["effet"],
+            "effet_gagnants_bas": effet_g["ic"][0],
+            "effet_gagnants_haut": effet_g["ic"][1],
+            "effet_gain": effet_r["effet"],
+            "effet_gain_bas": effet_r["ic"][0],
+            "effet_gain_haut": effet_r["ic"][1],
+            "rho_gagnants": float(rho),
+            "p_gagnants": float(valeur_p),
         })
-    table = pd.DataFrame(lignes).set_index("rang")
+    table = (pd.DataFrame(lignes)
+             .sort_values(["etoiles_exigees", "boules_exigees"], kind="stable")
+             .set_index("combinaison"))
+    # Une pente calculee sur les seuls tirages gagnes serait biaisee : on ne
+    # la publie pas.
+    colonnes_effet = [c for c in table.columns if c.startswith("effet_")]
+    table.loc[~table["mesurable"], colonnes_effet] = np.nan
 
-    colonne = f"gagnants_rang{RANG_PRINCIPAL}"
-    gagnants = pd.to_numeric(df[colonne], errors="coerce")
-    valides = gagnants.notna()
-    medianes = (pd.DataFrame({"petits": petits[valides], "gagnants": gagnants[valides]})
-                .groupby("petits")["gagnants"].agg(["median", "count"]))
+    # Dose-effet : a etoiles egales, l'effet sur les gagnants doit croitre, et
+    # celui sur le gain decroitre, avec le nombre de boules exigees.
+    familles = {}
+    for etoiles, groupe in table[table["mesurable"]].groupby("etoiles_exigees"):
+        suite = groupe.sort_values("boules_exigees")
+        familles[int(etoiles)] = {
+            "combinaisons": list(suite.index),
+            "effet_gagnants": [float(v) for v in suite["effet_gagnants"]],
+            "effet_gain": [float(v) for v in suite["effet_gain"]],
+            "coherente": bool(suite["effet_gagnants"].is_monotonic_increasing
+                              and suite["effet_gain"].is_monotonic_decreasing),
+        }
 
+    principale = libelle(PRINCIPALE)
+    gagnants = pd.to_numeric(df[colonne_gagnants(PRINCIPALE)], errors="coerce")
+    gains = pd.to_numeric(df[colonne_rapport(PRINCIPALE)], errors="coerce")
+    medianes = pd.DataFrame({
+        "gagnants": gagnants.groupby(petits).median(),
+        "gain": gains.groupby(petits).median(),
+        "tirages": petits.value_counts().sort_index(),
+    })
+    rho_gain, p_gain = stats.spearmanr(petits[gains.notna()], gains[gains.notna()])
+
+    # Tailles d'effet rapportees a un tirage typique plutot qu'au point le plus
+    # bas de la courbe : 3 boules <= 31 est a la fois le cas le plus frequent
+    # et le plus proche de la moyenne theorique (3,1).
+    typique = int(medianes["tirages"].idxmax())
+    haut = int(medianes.index.max())
+    temoin = table.loc[libelle(TEMOIN)]
     detail = {
         "medianes": medianes,
-        "rho_principal": float(table.loc[RANG_PRINCIPAL, "rho"]),
-        "p_principal": float(table.loc[RANG_PRINCIPAL, "p"]),
-        "rho_temoin": float(table.loc[RANG_TEMOIN, "rho"]),
-        "p_temoin": float(table.loc[RANG_TEMOIN, "p"]),
+        "principale": principale,
+        "temoin": libelle(TEMOIN),
+        "rho_principal": float(table.loc[principale, "rho_gagnants"]),
+        "p_principal": float(table.loc[principale, "p_gagnants"]),
+        "rho_gain": float(rho_gain),
+        "p_gain": float(p_gain),
+        "effet_principal_gagnants": float(table.loc[principale, "effet_gagnants"]),
+        "effet_principal_gain": float(table.loc[principale, "effet_gain"]),
+        "effet_temoin": float(temoin["effet_gagnants"]),
+        "ic_temoin": [float(temoin["effet_gagnants_bas"]), float(temoin["effet_gagnants_haut"])],
+        "temoin_nul": bool(temoin["effet_gagnants_bas"] <= 0 <= temoin["effet_gagnants_haut"]),
+        "familles": familles,
+        "dose_effet": bool(familles) and all(f["coherente"] for f in familles.values()),
+        "typique": typique,
+        "haut": haut,
+        "gagnants_vs_typique": float(medianes.loc[haut, "gagnants"] / medianes.loc[typique, "gagnants"] - 1),
+        "gain_vs_typique": float(medianes.loc[haut, "gain"] / medianes.loc[typique, "gain"] - 1),
         "moyenne_observee": float(petits.mean()),
-        "moyenne_theorique": BOULES_TIREES * SEUIL_DATES / BOULES_MAX,
+        "moyenne_theorique": BOULES_TIREES * SEUIL_DATES / BOULES,
         "part_observee": float((petits == 5).mean()),
-        "part_theorique": comb(SEUIL_DATES, 5) / comb(BOULES_MAX, 5),
+        "part_theorique": comb(SEUIL_DATES, 5) / comb(BOULES, 5),
     }
     return table, detail
 
 
 # --------------------------------------------------------------------------
+# Tests multiples
+# --------------------------------------------------------------------------
 
 
-def bloc_test(titre: str, t: Tirage, observes: pd.Series,
-              controle: dict) -> tuple[list[str], dict]:
-    resultat = t.test_ajustement(observes.values)
-    p_sim = p_empirique(controle["distribution"], resultat["khi2_brut"])
+def famille_de_tests(boules: dict, etoiles: list[dict]) -> dict:
+    """Tous les tests menes sur les tirages, et leur correction commune.
 
-    lignes = ["", titre, "-" * len(titre)]
-    lignes.append(f"  Tirages                  : {t.N}")
-    lignes.append(f"  Numeros possibles        : {t.K}")
-    lignes.append(f"  Sorties attendues/numero : {t.attendu:.1f}")
-    lignes.append(f"  Ecart-type attendu       : {t.ecart_type:.2f}  "
-                  f"(simule : {controle['ecart_type_simule']:.2f})")
-    lignes.append("")
-    haut, bas = observes.nlargest(3), observes.nsmallest(3)
-    lignes.append("  Les plus sortis   : " + ", ".join(f"{n} ({c}x)" for n, c in haut.items()))
-    lignes.append("  Les moins sortis  : " + ", ".join(f"{n} ({c}x)" for n, c in bas.items()))
-    lignes.append("")
-    lignes.append(f"  Statistique brute : {resultat['khi2_brut']:.2f}")
-    lignes.append(f"  Mise a l'echelle  : x {resultat['facteur']:.4f}  "
-                  f"-> {resultat['khi2']:.2f}")
-    lignes.append(f"  Seuil critique 5% : {resultat['critique']:.2f}  ({resultat['ddl']} ddl)")
-    lignes.append(f"  p-value           : {resultat['p']:.4f}")
-    lignes.append(f"  p-value simulee   : {p_sim:.4f}")
-    lignes.append("")
-    if resultat["p"] >= SEUIL:
-        lignes.append("  => Compatible avec l'equiprobabilite. Les ecarts observes")
-        lignes.append("     sont ce que produit un tirage equilibre.")
+    Les tests sont independants entre eux sauf les deux qui portent sur les
+    boules (ajustement global et numero extreme). Bonferroni reste valable
+    quelle que soit la dependance ; le risque global, lui, est calcule sous
+    independance et reste donc un ordre de grandeur.
+    """
+    # `nom` sert au rapport texte (ASCII), `libelle` et `detail` a la page.
+    milliers = lambda n: f"{n:,}".replace(",", "\u202f")  # noqa: E731
+    tests = [
+        {"nom": "Boules 1-50, ajustement global",
+         "libelle": "Boules 1-50, ajustement global",
+         "detail": f"{milliers(boules['tirage'].N)} tirages, 50 numéros",
+         "p": boules["test"]["p"]},
+        {"nom": "Boules 1-50, numero le plus atypique",
+         "libelle": "Boules 1-50, numéro le plus atypique",
+         "detail": f"le {boules['extreme']['numero']}, parmi 50 numéros",
+         "p": boules["extreme"]["p"]},
+    ]
+    for e in etoiles:
+        periode = e["regime"].nom.split(" : ")[0]
+        tests.append({"nom": f"Etoiles {periode}",
+                      "libelle": f"Étoiles {periode}",
+                      "detail": f"{milliers(e['tirage'].N)} tirages, {e['regime'].etoiles} étoiles",
+                      "p": e["test"]["p"]})
+    n = len(tests)
+    return {
+        "tests": tests,
+        "nombre": n,
+        "risque_global": 1 - (1 - SEUIL) ** n,
+        "bonferroni": SEUIL / n,
+        "sous_seuil": [t["nom"] for t in tests if t["p"] < SEUIL],
+        "survivants": [t["nom"] for t in tests if t["p"] < SEUIL / n],
+    }
+
+
+# --------------------------------------------------------------------------
+# Rapport texte
+# --------------------------------------------------------------------------
+
+
+def liste_numeros(effectifs: pd.Series) -> str:
+    return ", ".join(f"{n} ({c}x)" for n, c in effectifs.items())
+
+
+def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
+            table: pd.DataFrame, pop: dict, famille: dict) -> str:
+    t, test, ext = boules["tirage"], boules["test"], boules["extreme"]
+    fin = df["date_tirage"].max().strftime("%d/%m/%Y")
+    r = ["ANALYSE STATISTIQUE - EUROMILLIONS", "=" * 34, "",
+         f"Periode : {df['date_tirage'].min():%d/%m/%Y} -> {fin}   ({len(df)} tirages)",
+         "",
+         "Modele : a chaque tirage, un numero sort ou ne sort pas, avec une",
+         "probabilite B/K. Sur N tirages, ses sorties suivent B(N, B/K).",
+         "Les numeros d'un meme tirage etant distincts, la statistique de",
+         "Pearson suit (K-B)/(K-1) x chi2(K-1) : elle est mise a l'echelle",
+         "avant comparaison. Chaque test est double d'une simulation du",
+         "tirage reel (voir modele.py)."]
+
+    titre = "1. Les boules (1-50, historique complet)"
+    r += ["", titre, "-" * len(titre),
+          f"  Tirages                  : {t.N}",
+          f"  Sorties attendues/numero : {t.attendu:.1f}",
+          f"  Ecart-type attendu       : {t.ecart_type:.2f}  "
+          f"(simule : {boules['controle']['ecart_type_simule']:.2f})", "",
+          "  Les plus sortis   : " + liste_numeros(extremes(boules["freq"], 3, True)),
+          "  Les moins sortis  : " + liste_numeros(extremes(boules["freq"], 3, False)),
+          f"  Dans un historique equilibre, le numero de tete atteint au moins "
+          f"{int(boules['freq'].max())} sorties",
+          f"  dans {boules['p_maximum'] * 100:.0f} % des cas, et celui de queue descend a "
+          f"{int(boules['freq'].min())} ou moins dans {boules['p_minimum'] * 100:.1f} % des cas.",
+          "",
+          "  a) Ajustement global (khi-deux)",
+          f"     Statistique brute : {test['khi2_brut']:.2f}",
+          f"     Mise a l'echelle  : x {test['facteur']:.4f}  -> {test['khi2']:.2f}",
+          f"     Valeur moyenne sous le hasard : {test['ddl']} ; observee au "
+          f"{boules['percentile_khi2'] * 100:.0f}e centile",
+          f"     Seuil critique 5% : {test['critique']:.2f}  ({test['ddl']} ddl)",
+          f"     p-value           : {test['p']:.4f}   (simulee : {test['p_simulee']:.4f})"]
+    r.append("     => Compatible avec l'equiprobabilite." if test["p"] >= SEUIL
+             else "     => Sous le seuil de 5 % : voir la correction pour tests multiples.")
+
+    r += ["",
+          "  b) Numero par numero (loi binomiale exacte)",
+          f"     Bande a 95 %                    : {boules['bande'][0]} a {boules['bande'][1]} sorties",
+          f"     Bande corrigee (50 comparaisons) : {boules['bande_corrigee'][0]} a "
+          f"{boules['bande_corrigee'][1]} sorties",
+          f"     Hors bande a 95 %      : {len(boules['hors_bande'])} numero(s) "
+          f"{boules['hors_bande']}  (attendu par hasard : {boules['attendus_hors_bande']:.1f})",
+          f"     Hors bande corrigee    : {len(boules['hors_bande_corrigee'])} numero(s) "
+          f"{boules['hors_bande_corrigee']}",
+          f"     Le plus atypique : le {ext['numero']}, {ext['sorties']} sorties "
+          f"({ext['sens']}-represente)",
+          f"        p individuelle      : {ext['p_individuelle']:.5f}",
+          f"        p corrigee (Bonferroni, x50) : {ext['p_bonferroni']:.4f}",
+          f"        p corrigee (simulation)      : {ext['p']:.4f}   <- retenue",
+          "     La simulation mesure directement la question posee : dans un",
+          "     historique equilibre, a quelle frequence le plus atypique des",
+          "     50 numeros l'est-il au moins autant ? Bonferroni en donne une",
+          "     borne, un peu plus prudente."]
+
+    titre = "2. Les etoiles, regime par regime"
+    r += ["", titre, "-" * len(titre),
+          "  Le nombre d'etoiles a change deux fois. Melanger les periodes",
+          "  fausserait le denominateur : chaque regime est teste seul."]
+    for e in etoiles:
+        res = e["test"]
+        verdict = "compatible" if res["p"] >= SEUIL else "SOUS LE SEUIL DE 5 %"
+        r += ["", f"  {e['regime'].nom}",
+              f"     {e['tirage'].N} tirages, {e['regime'].etoiles} etoiles possibles",
+              f"     brut={res['khi2_brut']:.2f}  x{res['facteur']:.4f}"
+              f"  -> {res['khi2']:.2f}   seuil={res['critique']:.2f}",
+              f"     p={res['p']:.4f}   p simulee={res['p_simulee']:.4f}   -> {verdict}"]
+
+    a = absences
+    titre = "3. Les absences prolongees"
+    r += ["", titre, "-" * len(titre),
+          "  L'intuition du 'numero en retard' suppose qu'une longue absence",
+          "  appelle une sortie. Pour juger une absence, il faut savoir ce que",
+          f"  le hasard produit : {a['repetitions']} historiques equilibres simules.", "",
+          "                                   observe    simulation (IC 95 %)",
+          f"  Record, tous numeros confondus :  {a['record']:5d}      "
+          f"{a['record_simule_mediane']:.0f}  ({a['record_simule_ic'][0]:.0f} a "
+          f"{a['record_simule_ic'][1]:.0f})",
+          f"  Record median par numero       :  {a['mediane']:5.0f}      "
+          f"{a['mediane_simulee']:.0f}  ({a['mediane_simulee_ic'][0]:.0f} a "
+          f"{a['mediane_simulee_ic'][1]:.0f})", "",
+          f"  Le record observe ({a['record']} tirages, numero {a['numero_record']}) est atteint "
+          f"ou depasse",
+          f"  dans {a['p_record'] * 100:.0f} % des historiques equilibres.",
+          f"  Plus longue absence en cours au {fin} : {a['finale']} tirages "
+          f"(numero {a['numero_finale']}).", "",
+          "  Les absences observees sont celles d'un tirage equilibre. En voir",
+          "  une longue ne change rien a la probabilite du prochain tirage."]
+
+    titre = "4. Ce qu'on peut reellement optimiser"
+    r += ["", titre, "-" * len(titre),
+          "  Impossible d'augmenter ses chances de gagner. Possible, en",
+          "  revanche, d'augmenter ce qu'on gagne SI l'on gagne : chaque rang",
+          "  partage une cagnotte entre ses gagnants.", "",
+          "  Les boules, elles, ignorent la zone des dates de naissance :", "",
+          f"     Boules <= 31 par tirage, en moyenne  : {pop['moyenne_observee']:.2f}  "
+          f"(theorie : {pop['moyenne_theorique']:.2f})",
+          f"     Tirages dont les 5 boules sont <= 31 : {pop['part_observee'] * 100:.1f} %  "
+          f"(theorie : {pop['part_theorique'] * 100:.1f} %)", "",
+          "  Restait a montrer que les JOUEURS, eux, ne les ignorent pas, et",
+          "  que cela se paie. A combinaison fixee, le nombre de gagnants vaut",
+          "  environ (grilles jouees) x (probabilite qu'une grille corresponde),",
+          "  et ce second facteur depend des numeros que les joueurs cochent.",
+          "  Le gain par grille, lui, vaut (cagnotte du rang) / (gagnants).", "",
+          f"  Combinaison {pop['principale']} (3 boules, aucune etoile), selon le tirage :", "",
+          "     boules <= 31   gagnants (mediane)   gain par grille (mediane)   tirages"]
+    for n_petits, ligne in pop["medianes"].iterrows():
+        r.append(f"          {n_petits}         {ligne['gagnants']:>10,.0f}".replace(",", " ")
+                 + f"               {ligne['gain']:6.2f} EUR".replace(".", ",")
+                 + f"            {int(ligne['tirages']):4d}")
+    r += ["",
+          f"     Spearman, gagnants : rho = {pop['rho_principal']:+.3f}  (p = {pop['p_principal']:.1e})",
+          f"     Spearman, gain     : rho = {pop['rho_gain']:+.3f}  (p = {pop['p_gain']:.1e})",
+          f"     5 boules <= 31 contre {pop['typique']} (le cas typique) : "
+          f"{pop['gagnants_vs_typique'] * 100:+.0f} % de gagnants, "
+          f"{pop['gain_vs_typique'] * 100:+.0f} % de gain.",
+          "     La ligne a 0 boule repose sur trop peu de tirages pour etre lue seule.", "",
+          "  Relation dose-effet. Si l'effet vient des numeros coches, sa taille",
+          "  doit croitre avec le nombre de boules principales qu'exige la",
+          "  combinaison. Mesure : variation par boule <= 31 supplementaire dans",
+          "  le tirage (pente log-lineaire, effets fixes par regime, IC 95 %).", "",
+          "     combinaison   gagnants                   gain par grille"]
+    for combinaison, ligne in table.iterrows():
+        if not ligne["mesurable"]:
+            r.append(f"     {combinaison}  (rang {int(ligne['rang_actuel']):2d})   non mesurable : "
+                     f"{ligne['part_sans_gagnant'] * 100:.0f} % de tirages sans gagnant")
+            continue
+        marque = "   <- temoin" if combinaison == pop["temoin"] else ""
+        marque = "   <- reference" if combinaison == pop["principale"] else marque
+        r.append(f"     {combinaison}  (rang {int(ligne['rang_actuel']):2d})   "
+                 f"{ligne['effet_gagnants'] * 100:+5.1f} % "
+                 f"[{ligne['effet_gagnants_bas'] * 100:+5.1f} ; {ligne['effet_gagnants_haut'] * 100:+5.1f}]"
+                 f"   {ligne['effet_gain'] * 100:+5.1f} % "
+                 f"[{ligne['effet_gain_bas'] * 100:+5.1f} ; {ligne['effet_gain_haut'] * 100:+5.1f}]"
+                 f"{marque}")
+    r.append("")
+    for etoiles_exigees, f in pop["familles"].items():
+        suite = "  <  ".join(f"{c} {v * 100:+.1f} %"
+                             for c, v in zip(f["combinaisons"], f["effet_gagnants"]))
+        r.append(f"     {etoiles_exigees} etoile(s) : {suite}   "
+                 f"-> {'coherent' if f['coherente'] else 'NON COHERENT'}")
+    ic = pop["ic_temoin"]
+    r += ["",
+          f"  Le temoin {pop['temoin']}, seule combinaison a n'exiger qu'une boule, "
+          f"varie de {pop['effet_temoin'] * 100:+.1f} %",
+          f"  par petite boule [{ic[0] * 100:+.1f} ; {ic[1] * 100:+.1f}] : "
+          + ("un effet indiscernable de zero." if pop["temoin_nul"]
+             else "un effet faible mais non nul."),
+          ("  A etoiles egales, l'effet croit avec les boules exigees, pour les"
+           if pop["dose_effet"] else
+           "  ATTENTION : la relation dose-effet n'est pas verifiee partout,"),
+          ("  gagnants comme pour le gain : il vient des numeros que cochent"
+           if pop["dose_effet"] else
+           "  l'interpretation doit etre revue."),
+          ("  les joueurs. Le nombre d'etoiles exigees, lui, n'y change presque rien."
+           if pop["dose_effet"] else ""),
+          "",
+          "  Conclusion : une grille contenant des numeros > 31 a la meme",
+          "  probabilite de gagner, mais quand elle gagne, elle partage avec",
+          f"  moins de monde. A la combinaison {pop['principale']}, chaque boule <= 31 du tirage",
+          f"  change le gain de {pop['effet_principal_gain'] * 100:+.1f} %. Le jackpot, trop rarement gagne,",
+          "  echappe a cette mesure : l'effet y est extrapole, pas observe."]
+
+    m = famille
+    titre = "5. Le piege des tests multiples"
+    r += ["", titre, "-" * len(titre),
+          f"  {m['nombre']} tests ont ete menes sur les tirages. Un seuil a 5 % signifie",
+          "  qu'un test sur vingt franchit la barre par pur hasard, meme quand",
+          f"  rien n'est biaise. Sur {m['nombre']} tests, la probabilite d'en voir au moins",
+          f"  un 'significatif' par accident vaut environ {m['risque_global'] * 100:.0f} %.", "",
+          f"  La correction de Bonferroni divise le seuil par {m['nombre']} :",
+          f"  il passe de {SEUIL} a {m['bonferroni']:.4f}.", ""]
+    for essai in m["tests"]:
+        etat = "sous le seuil corrige" if essai["p"] < m["bonferroni"] else (
+            "sous 5 %, au-dessus du seuil corrige" if essai["p"] < SEUIL else "au-dessus")
+        r.append(f"     {essai['nom']:40s} p = {essai['p']:.4f}   {etat}")
+    r += ["",
+          "  Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :",
+          "  c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees",
+          "  pratiquement identiques.", ""]
+    if m["survivants"]:
+        r.append(f"  => {len(m['survivants'])} test(s) survivent a la correction : "
+                 f"{', '.join(m['survivants'])}.")
     else:
-        lignes.append("  => Sous le seuil de 5 %. A confronter a la correction pour")
-        lignes.append("     comparaisons multiples avant toute conclusion.")
-    return lignes, resultat
+        r += [f"  => {len(m['sous_seuil'])} test(s) sous 5 %, aucun ne survit a la correction.",
+              "     C'est ainsi que naissent les fausses decouvertes : en multipliant",
+              "     les decoupages jusqu'a en trouver un qui passe, puis en ne",
+              "     publiant que celui-la."]
+
+    chauds = boules["p_maximum"] >= SEUIL
+    r += ["", "Conclusion", "-" * 10]
+    if chauds and not m["survivants"]:
+        r += ["  Les 'numeros chauds' n'existent pas. Le score du numero de tete",
+              f"  ({int(boules['freq'].max())} sorties) est egale ou depasse dans "
+              f"{boules['p_maximum'] * 100:.0f} % des historiques",
+              "  equilibres, et aucun ecart ne resiste a la correction pour tests",
+              "  multiples.",
+              f"  Le plus atypique, le {ext['numero']}, est {ext['sens']}-represente "
+              f"(p = {ext['p']:.3f}) :",
+              f"  un tel extreme apparait dans environ un historique equilibre sur "
+              f"{1 / ext['p']:.0f},",
+              f"  et il ne franchit pas le seuil corrige ({m['bonferroni']:.2f})."]
+    else:
+        r += ["  Au moins un ecart resiste a l'analyse : voir les sections 1 et 5.",
+              "  Ce resultat doit etre examine avant toute conclusion."]
+    r += ["",
+          "  La FDJ ecrit sur sa page de statistiques qu'il n'est pas possible",
+          "  de determiner des probabilites fiables sur les tirages : entendu",
+          "  comme « on ne peut pas prevoir le prochain tirage ». Les probabilites",
+          "  elles-memes sont parfaitement connues ; ce projet les calcule.",
+          "  https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/statistiques"]
+    return "\n".join(r) + "\n"
+
+
+def analyser() -> dict:
+    """Toute l'analyse, sous une forme reutilisable par la page web."""
+    df = charger()
+    boules = etudier_boules(df)
+    etoiles = etudier_etoiles(df)
+    absences = etudier_absences(df)
+    table, pop = popularite(df)
+    famille = famille_de_tests(boules, etoiles)
+    return {"df": df, "boules": boules, "etoiles": etoiles, "absences": absences,
+            "table": table, "pop": pop, "famille": famille}
 
 
 def main() -> None:
-    df = charger()
-    rapport = ["ANALYSE STATISTIQUE - EUROMILLIONS", "=" * 34, "",
-               f"Periode : {df['date_tirage'].min():%d/%m/%Y} -> "
-               f"{df['date_tirage'].max():%d/%m/%Y}   ({len(df)} tirages)",
-               "",
-               "Modele : a chaque tirage, un numero sort ou ne sort pas, avec une",
-               "probabilite B/K. Sur N tirages, ses sorties suivent B(N, B/K).",
-               "Les 5 boules d'un meme tirage etant distinctes, la statistique de",
-               "Pearson a pour moyenne K-B et non K-1 : elle est mise a l'echelle",
-               "avant comparaison. Chaque test est double d'une simulation du",
-               "tirage reel (voir modele.py)."]
-
-    resultats_tests = []
-
-    # --- Boules ---
-    t_boules = Tirage(K=BOULES_MAX, B=BOULES_TIREES, N=len(df))
-    freq_boules = frequences(df, COLONNES_BOULES, BOULES_MAX)
-    controle = verifier(t_boules)
-    bloc, res = bloc_test("1. Les boules (1-50, historique complet)",
-                          t_boules, freq_boules, controle)
-    rapport += bloc
-    resultats_tests.append(("Boules, historique complet", res))
-
-    # --- Etoiles, regime par regime ---
-    rapport += ["", "2. Les etoiles, regime par regime", "-" * 33,
-                "  Le nombre d'etoiles a change deux fois. Melanger les periodes",
-                "  fausserait le denominateur : chaque regime est teste seul."]
-    for regime, maximum in ETOILES_PAR_REGIME.items():
-        bloc_df = df[df["regime"] == regime]
-        if bloc_df.empty:
-            continue
-        t = Tirage(K=maximum, B=2, N=len(bloc_df))
-        freq = frequences(bloc_df, COLONNES_ETOILES, maximum)
-        ctrl = verifier(t)
-        res = t.test_ajustement(freq.values)
-        p_sim = p_empirique(ctrl["distribution"], res["khi2_brut"])
-        verdict = "compatible" if res["p"] >= SEUIL else "SOUS LE SEUIL"
-        rapport.append("")
-        rapport.append(f"  {regime}")
-        rapport.append(f"     {len(bloc_df)} tirages, {maximum} etoiles possibles")
-        rapport.append(f"     brut={res['khi2_brut']:.2f}  x{res['facteur']:.4f}"
-                       f"  -> {res['khi2']:.2f}   seuil={res['critique']:.2f}")
-        rapport.append(f"     p={res['p']:.4f}   p simulee={p_sim:.4f}   -> {verdict}")
-        resultats_tests.append((f"Etoiles {regime.split(' : ')[0]}", res))
-
-    # --- Absences ---
-    ecarts = ecarts_maximaux(df, COLONNES_BOULES, BOULES_MAX)
-    fin = df["date_tirage"].max().strftime("%d/%m/%Y")
-    rapport += ["", "3. Les absences prolongees", "-" * 26,
-                "  L'intuition du 'numero en retard' suppose qu'une longue absence",
-                "  appelle une sortie. Voici ce que le hasard produit sans aide :", ""]
-    rapport.append(f"  Absence la plus longue observee : "
-                   f"{int(ecarts['absence_max'].max())} tirages "
-                   f"(numero {int(ecarts['absence_max'].idxmax())})")
-    rapport.append(f"  Absence maximale mediane        : "
-                   f"{ecarts['absence_max'].median():.0f} tirages")
-    rapport.append(f"  Plus longue absence au {fin}  : "
-                   f"{int(ecarts['absence_finale'].max())} tirages "
-                   f"(numero {int(ecarts['absence_finale'].idxmax())})")
-    rapport += ["",
-                "  Chaque numero a deja connu une absence de plusieurs dizaines",
-                "  de tirages. En voir une n'a donc rien d'anormal, et ne change",
-                "  en rien la probabilite du prochain tirage."]
-
-    # --- Popularite ---
-    table_rangs, pop = popularite(df)
-    rapport += ["", "4. Ce qu'on peut reellement optimiser", "-" * 37,
-                "  Impossible d'augmenter ses chances de gagner. Possible, en",
-                "  revanche, d'augmenter ce qu'on gagne SI l'on gagne : le jackpot",
-                "  est partage entre tous les gagnants.", "",
-                "  Les boules, elles, ignorent la zone des dates de naissance :", ""]
-    rapport.append(f"     Boules <= 31 par tirage, en moyenne  : "
-                   f"{pop['moyenne_observee']:.2f}  "
-                   f"(theorie : {pop['moyenne_theorique']:.2f})")
-    rapport.append(f"     Tirages dont les 5 boules sont <= 31 : "
-                   f"{pop['part_observee'] * 100:.1f} %  "
-                   f"(theorie : {pop['part_theorique'] * 100:.1f} %)")
-    rapport += ["",
-                "  Restait a montrer que les JOUEURS, eux, ne les ignorent pas.",
-                "  Le nombre de gagnants le revele : a rang fixe, il vaut environ",
-                "  (grilles jouees) x (probabilite qu'une grille corresponde), et",
-                "  ce second facteur depend des numeros que les joueurs cochent.",
-                "",
-                f"  Gagnants au rang {RANG_PRINCIPAL} (3 boules) selon le tirage :", ""]
-    for petits, ligne in pop["medianes"].iterrows():
-        rapport.append(f"     {petits} boule(s) <= 31 : mediane "
-                       f"{ligne['median']:>10,.0f} gagnants "
-                       f"({int(ligne['count'])} tirages)".replace(",", " "))
-    rapport += ["",
-                f"     Correlation de Spearman : rho = {pop['rho_principal']:+.3f}  "
-                f"(p = {pop['p_principal']:.1e})", "",
-                "  Le temoin ecarte l'explication fortuite. L'effet doit suivre le",
-                "  nombre de boules principales exigees par le rang :", ""]
-    for rang, ligne in table_rangs.sort_values(
-            ["boules_exigees", "etoiles_exigees"]).iterrows():
-        marque = ""
-        if rang == RANG_TEMOIN:
-            marque = "   <- temoin : n'exige qu'une boule"
-        elif rang == RANG_PRINCIPAL:
-            marque = "   <- rang de reference"
-        rapport.append(f"     rang {rang:2d} : {int(ligne['boules_exigees'])} boules + "
-                       f"{int(ligne['etoiles_exigees'])} etoiles   "
-                       f"rho = {ligne['rho']:+.3f}{marque}")
-    rapport += ["",
-                f"  Le rang {RANG_TEMOIN}, qui n'exige qu'une boule principale, ne reagit",
-                f"  pratiquement pas (rho = {pop['rho_temoin']:+.3f}, p = {pop['p_temoin']:.2f}).",
-                "  L'effet n'est donc pas un artefact : il suit exactement la",
-                "  dependance de chaque rang aux numeros principaux.",
-                "",
-                "  Conclusion : une grille contenant des numeros > 31 a la meme",
-                "  probabilite de sortir, mais serait partagee avec moins de monde.",
-                "  C'est la seule conclusion actionnable de cette analyse, et elle",
-                "  ne dit rien sur la probabilite de gagner."]
-
-    # --- Tests multiples ---
-    n_tests = len(resultats_tests)
-    risque_global = 1 - (1 - SEUIL) ** n_tests
-    bonferroni = SEUIL / n_tests
-    rapport += ["", "5. Le piege des tests multiples", "-" * 31,
-                f"  {n_tests} tests d'ajustement ont ete menes. Un seuil a 5 % signifie",
-                "  qu'un test sur vingt franchit la barre par pur hasard, meme",
-                f"  quand rien n'est biaise. Sur {n_tests} tests, la probabilite d'en voir",
-                f"  au moins un 'significatif' par accident vaut {risque_global * 100:.0f} %.",
-                "",
-                f"  La correction de Bonferroni divise le seuil par {n_tests} :",
-                f"  il passe de {SEUIL} a {bonferroni:.4f}.", ""]
-    for nom, res in resultats_tests:
-        etat = "sous le seuil corrige" if res["p"] < bonferroni else "au-dessus"
-        rapport.append(f"     {nom:38s} p = {res['p']:.4f}   {etat}")
-    survivants = [n for n, r in resultats_tests if r["p"] < bonferroni]
-    rapport += ["",
-                "  Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :",
-                "  c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees",
-                "  pratiquement identiques.", ""]
-    if survivants:
-        rapport.append(f"  => {len(survivants)} test(s) survivent a la correction : "
-                       f"{', '.join(survivants)}.")
-    else:
-        rapport.append("  => Aucun test ne survit a la correction. C'est precisement")
-        rapport.append("     ainsi que naissent les fausses decouvertes : en multipliant")
-        rapport.append("     les decoupages jusqu'a en trouver un qui passe, puis en ne")
-        rapport.append("     publiant que celui-la.")
-
-    rapport += ["", "Conclusion", "-" * 10,
-                "  Les 'numeros chauds' n'existent pas. Les ecarts de frequence",
-                "  visibles dans n'importe quel tableau de statistiques sont la",
-                "  signature normale du hasard : sur 50 numeros, il y en aura",
-                "  toujours un en tete et un en queue, meme avec des boules",
-                "  parfaitement equilibrees.",
-                "",
-                "  La FDJ le dit elle-meme sur ses pages de statistiques : il n'est",
-                "  pas possible de determiner des probabilites fiables sur les",
-                "  tirages a venir."]
-
-    texte = "\n".join(rapport)
+    a = analyser()
+    texte = rediger(a["df"], a["boules"], a["etoiles"], a["absences"],
+                    a["table"], a["pop"], a["famille"])
     (DOSSIER / "statistiques.txt").write_text(texte, encoding="utf-8")
 
-    export = freq_boules.rename("sorties").to_frame()
+    boules = a["boules"]
+    export = boules["freq"].rename("sorties").to_frame()
     export.index.name = "numero"
-    export["ecart_a_l_attendu"] = export["sorties"] - t_boules.attendu
-    export = export.join(ecarts)
+    export["ecart_a_l_attendu"] = (export["sorties"] - boules["tirage"].attendu).round(1)
+    export["p_individuelle"] = boules["tirage"].p_individuelle(export["sorties"].values).round(6)
+    export = export.join(a["absences"]["ecarts"])
     export.to_csv(DOSSIER / "frequences_boules.csv", sep=";")
-    table_rangs.to_csv(DOSSIER / "popularite_gagnants.csv", sep=";")
+    a["table"].to_csv(DOSSIER / "popularite_gagnants.csv", sep=";", float_format="%.6g")
 
     print(texte)
 

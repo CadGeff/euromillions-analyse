@@ -1,0 +1,7 @@
+# Versions avec lesquelles le pipeline a ete verifie (septembre 2026).
+# Minimums verifies : pandas 2.1.4, numpy 1.26.4, scipy 1.11.4 (sorties identiques).
+pandas>=2.1
+numpy>=1.26
+scipy>=1.11
+# Tests uniquement
+pytest>=7

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Numéros chauds</title>
-<meta name="description" content="Analyse statistique de 1981 tirages EuroMillions : les « numéros chauds » n'existent pas, et voici la démonstration.">
+<meta name="description" content="Analyse statistique de tous les tirages EuroMillions depuis 2004 : les « numéros chauds » n'existent pas, et voici la démonstration.">
 <style>
   :root {
     color-scheme: light;
@@ -21,6 +21,11 @@
     --band-faible:  #edf1f6;
     --bord-fort:    #8fb6e4;
     --bord-faible:  #b9c6d6;
+    /* Trois series categorielles (slots 1 a 3 de la palette de reference),
+       validees ensemble, toutes paires, en clair comme en sombre. */
+    --serie-0:      #2a78d6;
+    --serie-1:      #eb6834;
+    --serie-2:      #1baf7a;
     --radius: 10px;
   }
   @media (prefers-color-scheme: dark) {
@@ -39,6 +44,9 @@
       --band-faible: #121820;
       --bord-fort:   #4a6f9e;
       --bord-faible: #3a4654;
+      --serie-0:     #3987e5;
+      --serie-1:     #d95926;
+      --serie-2:     #199e70;
     }
   }
   :root[data-theme="dark"] {
@@ -56,6 +64,9 @@
     --band-faible: #121820;
     --bord-fort:   #4a6f9e;
     --bord-faible: #3a4654;
+    --serie-0:     #3987e5;
+    --serie-1:     #d95926;
+    --serie-2:     #199e70;
   }
 
   * { box-sizing: border-box; }
@@ -97,6 +108,10 @@
   figure { margin: 24px 0 0; background: var(--surface); border: 1px solid var(--grid); border-radius: var(--radius); padding: 20px 18px 14px; }
   figcaption { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.55; }
   svg { display: block; width: 100%; height: auto; overflow: visible; }
+  /* Sur un ecran etroit, un graphique large reduit a 390 px devient illisible :
+     on lui garde une largeur minimale et on le fait defiler dans son cadre. */
+  .cadre-large { overflow-x: auto; }
+  .cadre-large svg { min-width: 620px; }
 
   .legende { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 14px; }
   .legende span { display: inline-flex; align-items: center; gap: 7px; }
@@ -115,6 +130,10 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
   details { margin-top: 20px; }
+  .defile { overflow-x: auto; }
+  .defile table { min-width: 520px; }
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+  .duo h4 { margin: 0 0 8px; font-size: 13.5px; font-weight: 620; color: var(--ink-2); }
   summary { cursor: pointer; font-size: 14px; color: var(--ink-2); }
   details[open] summary { margin-bottom: 8px; }
 
@@ -166,8 +185,8 @@
       <span><i class="pastille" style="background: var(--band-faible); border: 1px dashed var(--bord-faible)"></i>Bande corrigée pour 50 comparaisons</span>
       <span><i class="pastille" style="background: var(--alert)"></i>Hors bande à 95 %</span>
     </div>
-    <svg id="g-frequences" viewBox="0 0 880 380" role="img"
-         aria-label="Nombre de sorties de chaque numéro, comparé à la variation attendue d'un tirage équilibré."></svg>
+    <div class="cadre-large"><svg id="g-frequences" viewBox="0 0 880 380" role="img"
+         aria-label="Nombre de sorties de chaque numéro, comparé à la variation attendue d'un tirage équilibré."></svg></div>
     <figcaption id="cap-frequences"></figcaption>
   </figure>
 
@@ -185,8 +204,8 @@
   </p>
 
   <figure>
-    <svg id="g-khi2" viewBox="0 0 880 260" role="img"
-         aria-label="Distribution du khi-deux à 49 degrés de liberté, avec la valeur observée et le seuil critique."></svg>
+    <div class="cadre-large"><svg id="g-khi2" viewBox="0 0 880 260" role="img"
+         aria-label="Distribution du khi-deux, avec la valeur observée et le seuil critique."></svg></div>
     <figcaption id="cap-khi2"></figcaption>
   </figure>
 
@@ -194,30 +213,24 @@
 
   <details>
     <summary>Le calcul, en clair</summary>
-    <p style="font-size:14.5px">
-      Pour chaque numéro on mesure l'écart entre les sorties observées et les
-      sorties attendues, on l'élève au carré pour que les écarts positifs et
-      négatifs ne s'annulent pas, puis on divise par l'attendu — un écart de 20
-      sur un attendu de 30 est énorme, le même sur un attendu de 5 000 est du
-      bruit. La somme de ces 50 termes est le khi-deux. Les degrés de liberté
-      valent 49 : une fois 49 effectifs connus et le total fixé, le dernier est
-      déterminé.
-    </p>
+    <p style="font-size:14.5px" id="calcul-clair"></p>
   </details>
 </section>
 
 <section>
-  <h2>Quatre tests, et un faux positif</h2>
+  <h2 id="titre-tests"></h2>
   <p class="sous">
     Les boules ne sont pas seules en jeu : les étoiles ont changé de nombre
-    deux fois, et chaque période demande son propre test. Voici les quatre
-    résultats, et ce qu'il faut en faire.
+    deux fois, et chaque période demande son propre test. S'y ajoute le test
+    du numéro le plus atypique. Voici les résultats, et ce qu'il faut en faire.
   </p>
 
-  <table id="t-tests">
-    <thead><tr><th>Test</th><th>Portée</th><th class="num">p-value</th></tr></thead>
-    <tbody></tbody>
-  </table>
+  <div class="defile">
+    <table id="t-tests">
+      <thead><tr><th>Test</th><th>Portée</th><th class="num">p-value</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
   <div class="encadre">
     <p id="encadre-multiples"></p>
@@ -241,12 +254,14 @@
   <h2>Et les numéros « en retard » ?</h2>
   <p class="sous">
     L'autre intuition tenace : un numéro absent depuis longtemps serait
-    « dû ». Voici les absences que le hasard a réellement produites.
+    « dû ». Pour juger une absence, il faut savoir ce que le hasard produit :
+    les absences observées sont ici confrontées à des milliers d'historiques
+    équilibrés simulés.
   </p>
 
   <figure>
-    <svg id="g-absences" viewBox="0 0 880 300" role="img"
-         aria-label="Plus longue absence observée pour chaque numéro, en nombre de tirages consécutifs."></svg>
+    <div class="cadre-large"><svg id="g-absences" viewBox="0 0 880 300" role="img"
+         aria-label="Plus longue absence observée pour chaque numéro, en nombre de tirages consécutifs."></svg></div>
     <figcaption id="cap-absences"></figcaption>
   </figure>
 </section>
@@ -258,9 +273,9 @@
     de gagner.
   </p>
   <p>
-    Le jackpot est <strong>partagé entre tous les gagnants</strong>. On ne peut
-    pas modifier ses chances de gagner, mais on peut modifier le nombre de
-    personnes avec qui l'on partagerait.
+    Chaque rang de gain <strong>partage sa cagnotte entre tous ses
+    gagnants</strong>. On ne peut pas modifier ses chances de gagner, mais on
+    peut modifier le nombre de personnes avec qui l'on partagerait.
   </p>
 
   <h3>D'abord : les boules ignorent les dates de naissance</h3>
@@ -269,13 +284,14 @@
     <tbody></tbody>
   </table>
 
-  <h3>Ensuite : les joueurs, eux, ne les ignorent pas</h3>
+  <h3>Ensuite : les joueurs, eux, ne les ignorent pas, et cela se paie</h3>
   <p>
     C'est l'affirmation qu'on lit partout, rarement démontrée. Les archives de
-    la FDJ permettent pourtant de la vérifier : à un rang de gain donné, le
+    la FDJ permettent pourtant de la vérifier. Pour une combinaison donnée, le
     nombre de gagnants vaut à peu près <em>(grilles jouées) × (probabilité
     qu'une grille corresponde)</em>, et ce second facteur dépend des numéros
-    que les joueurs cochent.
+    que les joueurs cochent. Le gain versé à chaque grille gagnante vaut, lui,
+    <em>(cagnotte du rang) ÷ (gagnants)</em>.
   </p>
   <p>
     Le volume de grilles varie beaucoup selon la taille du jackpot, mais il ne
@@ -283,48 +299,74 @@
   </p>
 
   <figure>
-    <svg id="g-popularite" viewBox="0 0 880 300" role="img"
-         aria-label="Nombre médian de gagnants selon le nombre de boules inférieures ou égales à 31 dans le tirage."></svg>
+    <div class="duo">
+      <div>
+        <h4 id="titre-gagnants"></h4>
+        <svg id="g-gagnants" viewBox="0 0 420 280" role="img"
+             aria-label="Nombre médian de gagnants selon le nombre de boules inférieures ou égales à 31 dans le tirage."></svg>
+      </div>
+      <div>
+        <h4 id="titre-gain"></h4>
+        <svg id="g-gain" viewBox="0 0 420 280" role="img"
+             aria-label="Gain médian par grille gagnante selon le nombre de boules inférieures ou égales à 31 dans le tirage."></svg>
+      </div>
+    </div>
     <figcaption id="cap-popularite"></figcaption>
   </figure>
 
-  <h3>Le témoin qui écarte le hasard</h3>
+  <h3>La preuve par la dose</h3>
   <p>
-    Une corrélation isolée ne prouve rien. Mais l'effet doit suivre une règle
-    précise : <strong>plus un rang exige de boules principales, plus il doit
-    réagir</strong>. Le rang qui n'en exige qu'une sert alors de témoin — il ne
-    devrait presque pas bouger.
+    Une corrélation isolée ne prouve rien. Mais si l'effet vient des numéros
+    cochés, il doit suivre une règle précise : <strong>plus une combinaison
+    exige de boules principales, plus elle doit réagir</strong>. Celle qui n'en
+    exige qu'une, 1 boule et 2 étoiles, sert de témoin : elle ne devrait
+    presque pas bouger. On compare des combinaisons exigeant le même nombre
+    d'étoiles, car chaque étoile exigée ajoute son propre bruit.
   </p>
 
   <figure>
-    <svg id="g-rangs" viewBox="0 0 880 300" role="img"
-         aria-label="Corrélation entre le nombre de gagnants et les petits numéros, pour chaque rang de gain."></svg>
-    <figcaption id="cap-rangs"></figcaption>
+    <div class="legende" id="legende-dose"></div>
+    <div class="cadre-large"><svg id="g-dose" viewBox="0 0 880 320" role="img"
+         aria-label="Variation du nombre de gagnants pour chaque boule inférieure ou égale à 31 de plus dans le tirage, selon le nombre de boules et d'étoiles exigées par la combinaison."></svg></div>
+    <figcaption id="cap-dose"></figcaption>
   </figure>
+
+  <details>
+    <summary>Le tableau complet, combinaison par combinaison</summary>
+    <div class="defile">
+      <table id="t-dose">
+        <thead><tr><th>Combinaison</th><th class="num">Rang actuel</th>
+          <th class="num">Gagnants, par petite boule</th>
+          <th class="num">Gain par grille, par petite boule</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p style="font-size:13.5px; color:var(--muted)">
+      Variation par boule ≤ 31 supplémentaire dans le tirage, estimée par une
+      pente log-linéaire avec un niveau propre à chaque régime de règles, et
+      son intervalle de confiance à 95 %. Une combinaison n'est pas mesurée
+      quand trop de tirages n'ont aucun gagnant : écarter ces tirages ne
+      garderait que les combinaisons les plus jouées.
+    </p>
+  </details>
 
   <div class="encadre">
     <p id="encadre-temoin"></p>
   </div>
 
-  <p>
-    <strong>L'opportunité vient donc entièrement du comportement des joueurs,
-    pas du tirage.</strong> Une grille contenant des numéros supérieurs à 31 a
-    exactement la même probabilité de sortir, mais serait partagée avec moins
-    de monde.
-  </p>
+  <p id="conclusion-popularite"></p>
 </section>
 
 <section>
   <h2>Conclusion</h2>
+  <p id="conclusion"></p>
   <p>
-    Les écarts de fréquence qu'affichent tous les sites de statistiques sont la
-    signature normale du hasard. Sur cinquante numéros, il y en aura toujours un
-    en tête et un en queue, même avec des boules parfaitement équilibrées.
-  </p>
-  <p>
-    La Française des Jeux l'écrit elle-même sur ses pages de statistiques : il
-    n'est pas possible de déterminer des probabilités fiables sur les tirages à
-    venir.
+    La Française des Jeux écrit elle-même, sur
+    <a href="https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/statistiques">sa page de statistiques</a>,
+    qu'il n'est pas possible de déterminer des probabilités fiables sur les
+    tirages. Il faut l'entendre comme « on ne peut pas prévoir le prochain
+    tirage » : les probabilités elles-mêmes sont parfaitement connues, et
+    cette page les calcule.
   </p>
 </section>
 
@@ -348,6 +390,12 @@
   const nb = n => n.toLocaleString("fr-FR");
   // Virgule decimale : la convention francaise, y compris dans les graphiques.
   const fr = v => String(v).replace(".", ",");
+  // Signe explicite, avec le vrai signe moins typographique.
+  // `d` fixe le nombre de decimales, zeros finaux compris (10,0 et non 10).
+  const signe = (v, d) => (v > 0 ? "+" : v < 0 ? "−" : "") +
+    fr(d === undefined ? Math.abs(v) : Math.abs(v).toFixed(d));
+  const pctp = v => fr((v * 100).toFixed(1)) + " %";
+  const euros = v => fr(v.toFixed(2)) + " €";
 
   function survol(el, texte) {
     el.style.cursor = "crosshair";
@@ -373,15 +421,27 @@
 
   // Une annotation posee dans l'aire du graphique finit toujours par croiser
   // une marque. On la pose donc sur un fond opaque de la couleur de la surface,
-  // plutot que de chercher une zone libre qui n'existe pas.
+  // dimensionne sur le texte rendu plutot que sur une estimation de sa largeur.
   function annotation(svg, x, y, texte, ancre) {
     const t = el("text", { x: ancre === "end" ? x - 6 : x + 6, y: y + 1,
-      "text-anchor": ancre, fill: "var(--ink-2)", "font-size": 11.5 });
+      "text-anchor": ancre, fill: "var(--ink-2)", "font-size": 11.5,
+      "dominant-baseline": "middle" });
     t.textContent = texte;
     svg.appendChild(t);
-    // On mesure le texte rendu plutot que d'estimer sa largeur : une estimation
-    // laisse depasser les marques sous les bords du fond.
-    t.setAttribute("dominant-baseline", "middle");
+    const b = t.getBBox();
+    svg.insertBefore(el("rect", { x: b.x - 3, y: b.y - 1, width: b.width + 6,
+      height: b.height + 2, rx: 3, fill: "var(--surface)" }), t);
+  }
+
+  function graduations(svg, x1, x2, Y, debut, fin, pas, format) {
+    for (let v = Math.ceil(debut / pas) * pas; v <= fin + 1e-9; v += pas) {
+      svg.appendChild(el("line", { x1, x2, y1: Y(v), y2: Y(v),
+        stroke: "var(--grid)", "stroke-width": 1 }));
+      const lb = el("text", { x: x1 - 9, y: Y(v) + 4, "text-anchor": "end",
+        fill: "var(--muted)", "font-size": 11 });
+      lb.textContent = format(v);
+      svg.appendChild(lb);
+    }
   }
 
   // ---- Entête -----------------------------------------------------------
@@ -390,18 +450,18 @@
     `${nb(p.tirages)} tirages EuroMillions, du ${p.debut} au ${p.fin} — ` +
     `${nb(DONNEES.reference.total)} boules tirées.<br>` +
     `Jeu de données arrêté au tirage du ${p.fin} ; deux tirages ont lieu chaque ` +
-    `semaine, le mardi et le vendredi. Page générée le ${p.generee_le}.`;
+    `semaine, le mardi et le vendredi, et ces chiffres ne décrivent donc pas les suivants.`;
 
   // ---- Tuiles -----------------------------------------------------------
   const freq = DONNEES.frequences;
+  const ref = DONNEES.reference;
+  const ext = DONNEES.extreme;
   const maxi = Math.max(...freq.map(f => f.sorties));
   const mini = Math.min(...freq.map(f => f.sorties));
   // Les ex aequo sont la norme, pas l'exception : plusieurs numeros peuvent
   // partager le record. Prendre le premier d'un tri en masquerait les autres.
   const tetes = freq.filter(f => f.sorties === maxi).map(f => f.numero);
   const queues = freq.filter(f => f.sorties === mini).map(f => f.numero);
-  const haut = { numero: tetes[0], sorties: maxi };
-  const bas = { numero: queues[0], sorties: mini };
 
   // « 42 », « 42 et 44 », « 42, 44 et 7 »
   const liste = ns => ns.length === 1 ? String(ns[0])
@@ -422,65 +482,59 @@
       l: `${accord(queues, "Le moins sorti", "Les moins sortis")} — ` +
          `${nb(mini)} fois${accord(queues, "", " chacun")}` },
     { v: nb(maxi - mini), l: "Sorties d'écart entre les extrêmes" },
-    { v: fr(DONNEES.reference.attendu), l: "Sorties attendues par numéro" },
+    { v: fr(ref.attendu), l: "Sorties attendues par numéro" },
   ]);
+
+  const [p1, p2] = ref.bande_ponctuelle, [s1, s2] = ref.bande_simultanee;
+  const dehors95 = freq.filter(f => f.sorties < p1 || f.sorties > p2);
+  const dehorsCorr = freq.filter(f => f.sorties < s1 || f.sorties > s2);
+  const tropFrequents = freq.filter(f => f.sorties > s2);
 
   const t = DONNEES.test;
   tuiles("tuiles-test", [
     { v: fr(t.khi2), l: `Khi-deux mis à l'échelle (brut ${fr(t.khi2_brut)} × ${fr(t.facteur)})` },
     { v: fr(t.critique), l: "Seuil critique à 5 %" },
     { v: fr(t.p.toFixed(3)), l: `p-value — ${fr(t.p_simulee.toFixed(3))} par simulation` },
-    { v: "Aucun", l: "Numéro anormalement fréquent" },
+    { v: tropFrequents.length ? liste(tropFrequents.map(f => f.numero)) : "Aucun",
+      l: "Numéro anormalement fréquent, bande corrigée" },
   ]);
 
   // ---- Graphique 1 : fréquences ----------------------------------------
   (function () {
     const svg = document.getElementById("g-frequences");
     const L = 880, H = 380, mg = { h: 14, b: 34, g: 46, d: 104 };
-    const ref = DONNEES.reference;
-    const [p1, p2] = ref.bande_ponctuelle, [s1, s2] = ref.bande_simultanee;
 
-    const yMin = Math.min(s1, bas.sorties) - 14;
-    const yMax = Math.max(s2, haut.sorties) + 14;
+    // Les bandes couvrent des effectifs entiers : elles sont tracees d'une
+    // demi-unite au-dela de leurs bornes, pour qu'une barre a la borne soit
+    // visiblement dedans et une barre juste apres, visiblement dehors.
+    const yMin = Math.min(s1, mini) - 14;
+    const yMax = Math.max(s2, maxi) + 14;
     const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
     const Y = v => mg.h + ph * (1 - (v - yMin) / (yMax - yMin));
     const pas = px / freq.length;
     const larg = pas * 0.62;
 
-    // bandes
     // La bande large est bornee par un trait tirete, l'etroite par un trait
     // plein : la distinction ne repose pas sur la seule nuance de fond.
-    svg.appendChild(el("rect", { x: mg.g, y: Y(s2), width: px, height: Y(s1) - Y(s2),
-      fill: "var(--band-faible)" }));
-    [s1, s2].forEach(v => svg.appendChild(el("line", {
+    svg.appendChild(el("rect", { x: mg.g, y: Y(s2 + 0.5), width: px,
+      height: Y(s1 - 0.5) - Y(s2 + 0.5), fill: "var(--band-faible)" }));
+    [s1 - 0.5, s2 + 0.5].forEach(v => svg.appendChild(el("line", {
       x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
       stroke: "var(--bord-faible)", "stroke-width": 1, "stroke-dasharray": "4 3" })));
-    svg.appendChild(el("rect", { x: mg.g, y: Y(p2), width: px, height: Y(p1) - Y(p2),
-      fill: "var(--band-fort)" }));
-    [p1, p2].forEach(v => svg.appendChild(el("line", {
+    svg.appendChild(el("rect", { x: mg.g, y: Y(p2 + 0.5), width: px,
+      height: Y(p1 - 0.5) - Y(p2 + 0.5), fill: "var(--band-fort)" }));
+    [p1 - 0.5, p2 + 0.5].forEach(v => svg.appendChild(el("line", {
       x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
       stroke: "var(--bord-fort)", "stroke-width": 1 })));
 
-    // graduations
-    const gradPas = 20;
-    for (let v = Math.ceil(yMin / gradPas) * gradPas; v <= yMax; v += gradPas) {
-      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
-        stroke: "var(--grid)", "stroke-width": 1 }));
-      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
-        fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = v;
-      svg.appendChild(lb);
-    }
+    graduations(svg, mg.g, L - mg.d, Y, yMin, yMax, 20, v => v);
 
-    // ligne d'attendu
     svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(ref.attendu), y2: Y(ref.attendu),
       stroke: "var(--axis)", "stroke-width": 2, "stroke-dasharray": "5 4" }));
     annotation(svg, L - mg.d, Y(ref.attendu), `attendu : ${fr(ref.attendu)}`, "start");
 
-    let horsBande = 0;
     freq.forEach((f, i) => {
       const dehors = f.sorties < p1 || f.sorties > p2;
-      if (dehors) horsBande++;
       const y0 = Y(ref.attendu), y1 = Y(f.sorties);
       const x = mg.g + i * pas + (pas - larg) / 2;
       const r = el("rect", {
@@ -488,7 +542,7 @@
         rx: 2, fill: dehors ? "var(--alert)" : "var(--series)",
       });
       survol(r, `<b>Numéro ${f.numero}</b><br>${nb(f.sorties)} sorties ` +
-                `(${f.sorties > ref.attendu ? "+" : ""}${fr((f.sorties - ref.attendu).toFixed(1))})`);
+                `(${signe(f.sorties - ref.attendu, 1)})`);
       svg.appendChild(r);
 
       if (f.numero % 5 === 0 || f.numero === 1) {
@@ -506,21 +560,35 @@
 
     document.getElementById("cap-frequences").textContent =
       `Chaque barre mesure l'écart d'un numéro à la moyenne attendue (${fr(ref.attendu)} sorties). ` +
-      `La bande foncée couvre 95 % de la variation qu'un tirage équilibré produit pour un numéro donné ; ` +
-      `la bande claire l'élargit pour tenir compte du fait qu'on examine 50 numéros à la fois.`;
+      `La bande foncée (${p1} à ${p2} sorties) couvre 95 % de la variation qu'un tirage équilibré ` +
+      `produit pour un numéro donné ; la bande claire (${s1} à ${s2}) l'élargit pour tenir compte ` +
+      `du fait qu'on examine 50 numéros à la fois. Bornes calculées sur la loi binomiale exacte.`;
 
-    const dehorsListe = freq.filter(f => f.sorties < p1 || f.sorties > p2);
-    const ndehors = dehorsListe.length;
-    const phrase = ndehors === 1
-      ? `Un seul numéro sort de la bande à 95 % — le <b>${dehorsListe[0].numero}</b>, ` +
-        `avec ${nb(dehorsListe[0].sorties)} sorties. `
-      : `${ndehors} numéros sortent de la bande à 95 % : ` +
-        `<b>${liste(dehorsListe.map(f => f.numero))}</b>. `;
-    document.getElementById("encadre-bande").innerHTML =
-      phrase +
-      `Or en examinant 50 numéros à un seuil de 5 %, on s'attend à en voir <b>${ref.attendus_hors_bande.toString().replace(".", ",")}</b> ` +
-      `sortir par pur hasard. Il y en a donc <i>moins</i> que prévu. ` +
-      `Une fois la bande corrigée pour ces 50 comparaisons simultanées, <b>aucun numéro n'en sort</b>.`;
+    // Le texte suit les donnees : combien sortent de chaque bande, et ce que
+    // cela vaut face a ce que le hasard produit.
+    const n95 = dehors95.length;
+    let phrase = n95 === 0 ? "Aucun numéro ne sort de la bande à 95 %. "
+      : n95 === 1 ? `Un seul numéro sort de la bande à 95 % : le <b>${dehors95[0].numero}</b>, ` +
+                    `avec ${nb(dehors95[0].sorties)} sorties. `
+      : `${n95} numéros sortent de la bande à 95 % : <b>${liste(dehors95.map(f => f.numero))}</b>. `;
+    const compare = n95 < ref.attendus_hors_bande ? "moins" : n95 > ref.attendus_hors_bande ? "plus" : "autant";
+    phrase += `Or en examinant 50 numéros à un seuil de 5 %, on s'attend à en voir ` +
+              `<b>${fr(ref.attendus_hors_bande)}</b> sortir par pur hasard : il y en a <i>${compare}</i> que prévu. `;
+    if (dehorsCorr.length) {
+      const hors = dehorsCorr.find(f => f.numero === ext.numero) ? `Le ${ext.numero}` :
+        liste(dehorsCorr.map(f => f.numero));
+      phrase += `${hors} sort pourtant même de la bande corrigée, de justesse. ` +
+                `C'est un numéro <i>${ext.sens === "sous" ? "froid" : "chaud"}</i> : ` +
+                `un écart aussi marqué pour le plus atypique des 50 numéros survient dans ` +
+                `${fr((ext.p * 100).toFixed(1))} % des historiques équilibrés (<i>p</i> = ${fr(ext.p.toFixed(3))}). ` +
+                `C'est sous 5 %, mais ce n'est pas le seul test mené : on verra ` +
+                `plus bas ce qu'il en reste une fois tous les tests pris en compte.`;
+    } else {
+      phrase += `Une fois la bande corrigée pour ces 50 comparaisons simultanées, <b>aucun numéro n'en sort</b>.`;
+    }
+    phrase += ` Quant au score du numéro de tête (${nb(maxi)} sorties), un tirage équilibré ` +
+              `l'égale ou le dépasse dans ${Math.round(ref.p_maximum * 100)} % des historiques simulés.`;
+    document.getElementById("encadre-bande").innerHTML = phrase;
   })();
 
   // ---- Graphique 2 : distribution du khi-deux --------------------------
@@ -533,7 +601,6 @@
     const X = v => mg.g + px * (v / xMax);
     const Y = v => mg.h + ph * (1 - v / yMax);
 
-    // aire de rejet (au-delà du seuil critique)
     const rejet = c.filter(d => d.x >= t.critique);
     if (rejet.length) {
       let d = `M ${X(rejet[0].x)} ${Y(0)}`;
@@ -542,19 +609,16 @@
       svg.appendChild(el("path", { d, fill: "var(--alert)", "fill-opacity": 0.16 }));
     }
 
-    // aire d'acceptation
     const ok = c.filter(d => d.x <= t.critique);
     let da = `M ${X(ok[0].x)} ${Y(0)}`;
     ok.forEach(pt => da += ` L ${X(pt.x)} ${Y(pt.y)}`);
     da += ` L ${X(ok[ok.length - 1].x)} ${Y(0)} Z`;
     svg.appendChild(el("path", { d: da, fill: "var(--series)", "fill-opacity": 0.12 }));
 
-    // courbe
     let dc = "";
     c.forEach((pt, i) => dc += (i ? " L " : "M ") + X(pt.x) + " " + Y(pt.y));
     svg.appendChild(el("path", { d: dc, fill: "none", stroke: "var(--series)", "stroke-width": 2 }));
 
-    // axe
     svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(0), y2: Y(0),
       stroke: "var(--axis)", "stroke-width": 1 }));
 
@@ -582,18 +646,39 @@
     }
     const ax = el("text", { x: mg.g + px / 2, y: H - 6, "text-anchor": "middle",
       fill: "var(--muted)", "font-size": 11.5 });
-    ax.textContent = "valeur du khi-deux (49 degrés de liberté)";
+    ax.textContent = `valeur du khi-deux (${t.ddl} degrés de liberté)`;
     svg.appendChild(ax);
 
+    const partPlus = Math.round(t.p * 100);
     document.getElementById("cap-khi2").textContent =
-      `La courbe montre les valeurs de khi-deux qu'un tirage parfaitement équilibré produit. ` +
-      `La zone rouge, à droite du seuil, ne représente que 5 % des cas : y tomber signalerait un biais. ` +
-      `La valeur observée (${fr(t.khi2)}) est très en deçà — p = ${fr(t.p.toFixed(3))}, ` +
-      `soit une situation parfaitement banale.`;
+      `La courbe montre les valeurs de khi-deux qu'un tirage parfaitement équilibré produit ; ` +
+      `elles valent ${t.ddl} en moyenne. La zone rouge, à droite du seuil, ne représente que 5 % des cas : ` +
+      `y tomber signalerait un biais. ` +
+      (t.p >= DONNEES.multiples.seuil
+        ? `La valeur observée (${fr(t.khi2)}) est au-dessus de la moyenne mais sous le seuil : ` +
+          `un tirage équilibré fait au moins autant dans ${partPlus} % des cas (p = ${fr(t.p.toFixed(3))}). ` +
+          `Les écarts sont un peu plus marqués que d'ordinaire, sans rien d'anormal.`
+        : `La valeur observée (${fr(t.khi2)}) dépasse le seuil (p = ${fr(t.p.toFixed(3))}).`);
+
+    document.getElementById("calcul-clair").innerHTML =
+      `Pour chaque numéro on mesure l'écart entre les sorties observées et les ` +
+      `sorties attendues, on l'élève au carré pour que les écarts positifs et ` +
+      `négatifs ne s'annulent pas, puis on divise par l'attendu — un écart de 20 ` +
+      `sur un attendu de 30 est énorme, le même sur un attendu de 5 000 est du ` +
+      `bruit. La somme de ces 50 termes vaut ici ${fr(t.khi2_brut)}.<br><br>` +
+      `Une correction s'impose avant de la comparer à la courbe : les cinq boules d'un ` +
+      `même tirage sont forcément différentes, ce qui resserre les écarts entre ` +
+      `numéros. La somme est donc multipliée par ${fr(t.facteur)} (soit ${t.ddl}/${t.ddl - 4}), ` +
+      `ce qui donne ${fr(t.khi2)}. La simulation de milliers d'historiques complets ` +
+      `confirme le résultat : p = ${fr(t.p_simulee.toFixed(3))} par simulation, ` +
+      `contre ${fr(t.p.toFixed(3))} par le calcul.<br><br>` +
+      `Les degrés de liberté valent ${t.ddl} : une fois ${t.ddl} effectifs connus ` +
+      `et le total fixé, le dernier est déterminé.`;
   })();
 
   // ---- Graphique 3 : absences ------------------------------------------
   (function () {
+    const a = DONNEES.absences;
     const svg = document.getElementById("g-absences");
     const L = 880, H = 300, mg = { h: 16, b: 34, g: 46, d: 104 };
     const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
@@ -602,21 +687,11 @@
     const Y = v => mg.h + ph * (1 - v / yMax);
     const pas = px / freq.length, larg = pas * 0.62;
 
-    const medianes = [...freq.map(f => f.absence_max)].sort((a, b) => a - b);
-    const med = medianes[Math.floor(medianes.length / 2)];
+    graduations(svg, mg.g, L - mg.d, Y, 0, yMax, 20, v => v);
 
-    for (let v = 0; v <= yMax; v += 20) {
-      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
-        stroke: "var(--grid)", "stroke-width": 1 }));
-      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
-        fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = v;
-      svg.appendChild(lb);
-    }
-
-    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(med), y2: Y(med),
+    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(a.mediane), y2: Y(a.mediane),
       stroke: "var(--axis)", "stroke-width": 2, "stroke-dasharray": "5 4" }));
-    annotation(svg, L - mg.d, Y(med), `médiane : ${med} tirages`, "start");
+    annotation(svg, L - mg.d, Y(a.mediane), `médiane : ${fr(a.mediane)}`, "start");
 
     freq.forEach((f, i) => {
       const x = mg.g + i * pas + (pas - larg) / 2;
@@ -638,187 +713,254 @@
     ax.textContent = "numéro de boule";
     svg.appendChild(ax);
 
-    const record = freq.reduce((a, b) => b.absence_max > a.absence_max ? b : a);
+    const [r1, r2] = a.record_simule_ic, [m1, m2] = a.mediane_simulee_ic;
     document.getElementById("cap-absences").textContent =
       `Plus longue série de tirages consécutifs sans sortie, pour chaque numéro. ` +
-      `Le record appartient au ${record.numero} avec ${record.absence_max} tirages d'absence, ` +
-      `et la médiane s'établit à ${med}. Tous les numéros ont connu de longues absences : ` +
-      `en observer une n'a donc rien d'exceptionnel, et ne change rien au tirage suivant.`;
+      `Le record appartient au ${a.numero_record} avec ${a.record} tirages d'absence. ` +
+      `Dans ${nb(a.repetitions)} historiques équilibrés simulés, le record vaut ` +
+      `${fr(a.record_simule_mediane)} tirages en médiane (${fr(r1)} à ${fr(r2)} dans 95 % des cas) : ` +
+      `${a.record} est atteint ou dépassé dans ${Math.round(a.p_record * 100)} % d'entre eux. ` +
+      `La médiane des records, ${fr(a.mediane)}, est aussi celle qu'on attend ` +
+      `(${fr(a.mediane_simulee)}, entre ${fr(m1)} et ${fr(m2)}). Ces longues absences sont ` +
+      `celles d'un tirage équilibré, et elles ne changent rien au tirage suivant.`;
   })();
 
-  // ---- Tableau des quatre tests ----------------------------------------
+  // ---- Tableau des tests -----------------------------------------------
   (function () {
     const m = DONNEES.multiples;
-    document.querySelector("#t-tests tbody").innerHTML = DONNEES.tests.map(t => {
-      const sous = t.p < 0.05;
-      return `<tr><td>${t.nom}</td><td>${t.detail}</td>` +
-             `<td class="num"${sous ? ' style="color:var(--alert);font-weight:640"' : ""}>` +
-             `${fr(t.p.toFixed(4))}</td></tr>`;
+    const sous = DONNEES.tests.filter(x => x.p < m.seuil);
+    const survivants = DONNEES.tests.filter(x => x.p < m.bonferroni);
+
+    document.getElementById("titre-tests").textContent =
+      `${m.nombre} tests, et ${sous.length === 0 ? "aucun" : sous.length} passage` +
+      `${sous.length > 1 ? "s" : ""} sous 5 %`;
+
+    document.querySelector("#t-tests tbody").innerHTML = DONNEES.tests.map(x => {
+      const alerte = x.p < m.seuil;
+      return `<tr><td>${x.nom}</td><td>${x.detail}</td>` +
+             `<td class="num"${alerte ? ' style="color:var(--alert);font-weight:640"' : ""}>` +
+             `${fr(x.p.toFixed(4))}</td></tr>`;
     }).join("");
 
-    const sous = DONNEES.tests.filter(t => t.p < 0.05);
-    const survivants = DONNEES.tests.filter(t => t.p < m.bonferroni);
     let txt = "";
     if (sous.length) {
       txt += `<b>${sous.length === 1 ? "Un test passe" : sous.length + " tests passent"} ` +
-             `sous le seuil de 5 %</b> : ${sous.map(t => t.nom).join(", ")}. ` +
+             `sous le seuil de 5 %</b> : ${sous.map(x => x.nom).join(" ; ")}. ` +
              `Un analyste pressé y verrait un biais du tirage. `;
     }
     txt += `Mais sur ${m.nombre} tests, la probabilité d'en voir au moins un ` +
-           `« significatif » par accident vaut <b>${m.risque_global} %</b>. ` +
+           `« significatif » par accident vaut environ <b>${m.risque_global} %</b>. ` +
            `La correction de Bonferroni ramène le seuil à <b>${fr(m.bonferroni)}</b> — `;
     txt += survivants.length
-      ? `${survivants.length} test(s) y survivent : ${survivants.map(t => t.nom).join(", ")}.`
+      ? `${survivants.length} test(s) y survivent : ${survivants.map(x => x.nom).join(" ; ")}.`
       : `<b>aucun test n'y survit</b>.`;
     document.getElementById("encadre-multiples").innerHTML = txt;
   })();
 
-  // ---- Graphique 4 : gagnants selon les petits numéros -----------------
-  (function () {
-    const po = DONNEES.popularite, d = po.medianes;
-    const svg = document.getElementById("g-popularite");
-    const L = 880, H = 300, mg = { h: 20, b: 58, g: 64, d: 16 };
-    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
-    const yMax = Math.max(...d.map(x => x.gagnants)) * 1.14;
-    const Y = v => mg.h + ph * (1 - v / yMax);
-    const pas = px / d.length, larg = Math.min(pas * 0.52, 74);
-
-    for (let v = 0; v <= yMax; v += 20000) {
-      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
-        stroke: "var(--grid)", "stroke-width": 1 }));
-      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
-        fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = nb(v);
-      svg.appendChild(lb);
-    }
-
-    d.forEach((x, i) => {
-      const cx = mg.g + i * pas + pas / 2;
-      const r = el("rect", { x: cx - larg / 2, y: Y(x.gagnants), width: larg,
-        height: Y(0) - Y(x.gagnants), rx: 3, fill: "var(--series)" });
-      survol(r, `<b>${x.petits} boule${x.petits > 1 ? "s" : ""} ≤ 31</b>` +
-                `<br>${nb(x.gagnants)} gagnants (médiane)<br>${nb(x.tirages)} tirages`);
-      svg.appendChild(r);
-
-      const lb = el("text", { x: cx, y: H - mg.b + 20, "text-anchor": "middle",
-        fill: "var(--muted)", "font-size": 11.5 });
-      lb.textContent = x.petits;
-      svg.appendChild(lb);
-
-      // L'effectif sous chaque barre : la colonne « 0 boule » ne repose que
-      // sur une poignee de tirages et ne doit pas se lire comme les autres.
-      const n = el("text", { x: cx, y: H - mg.b + 34, "text-anchor": "middle",
-        fill: "var(--muted)", "font-size": 10 });
-      n.textContent = `${nb(x.tirages)} tirages`;
-      svg.appendChild(n);
-    });
-
-    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 52, "text-anchor": "middle",
-      fill: "var(--muted)", "font-size": 11.5 });
-    ax.textContent = "nombre de boules ≤ 31 dans le tirage";
-    svg.appendChild(ax);
-
-    const bas = d.find(x => x.petits === 1) || d[0];
-    const haut = d[d.length - 1];
-    const gain = Math.round((haut.gagnants / bas.gagnants - 1) * 100);
-    document.getElementById("cap-popularite").textContent =
-      `Nombre médian de gagnants au rang ${po.rang_principal} ` +
-      `(${po.boules_principal} bons numéros), selon le nombre de boules ≤ 31 du tirage. ` +
-      `Un tirage entièrement composé de « dates de naissance » produit ${gain} % de ` +
-      `gagnants de plus qu'un tirage qui n'en contient qu'une. ` +
-      `Corrélation de Spearman : ρ = ${fr(po.rho_principal)}. ` +
-      `L'effectif figure sous chaque barre : la colonne de gauche ne repose que sur ` +
-      `${nb(d[0].tirages)} tirages et se lit donc avec prudence.`;
-  })();
-
-  // ---- Graphique 5 : l'effet suit les boules exigées -------------------
-  (function () {
-    const po = DONNEES.popularite, d = po.rangs;
-    const svg = document.getElementById("g-rangs");
-    const L = 880, H = 300, mg = { h: 20, b: 66, g: 56, d: 16 };
-    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
-    const yMax = Math.max(...d.map(x => x.rho)) * 1.18;
-    const Y = v => mg.h + ph * (1 - v / yMax);
-    const pas = px / d.length, larg = pas * 0.58;
-
-    for (let v = 0; v <= yMax; v += 0.05) {
-      svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(v), y2: Y(v),
-        stroke: "var(--grid)", "stroke-width": 1 }));
-      const lb = el("text", { x: mg.g - 9, y: Y(v) + 4, "text-anchor": "end",
-        fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = fr(v.toFixed(2));
-      svg.appendChild(lb);
-    }
-
-    d.forEach((x, i) => {
-      const cx = mg.g + i * pas + pas / 2;
-      const temoin = x.rang === po.rang_temoin;
-      const r = el("rect", { x: cx - larg / 2, y: Y(x.rho), width: larg,
-        height: Math.max(Y(0) - Y(x.rho), 1.5), rx: 2,
-        fill: temoin ? "var(--alert)" : "var(--series)" });
-      survol(r, `<b>Rang ${x.rang}</b> — ${x.boules} boule${x.boules > 1 ? "s" : ""}` +
-                ` + ${x.etoiles} étoile${x.etoiles > 1 ? "s" : ""}<br>ρ = ${fr(x.rho)}` +
-                `<br>${nb(x.tirages)} tirages documentés` +
-                `<br>${x.part_sans_gagnant} % sans aucun gagnant`);
-      svg.appendChild(r);
-
-      // Etiquette « boules + etoiles » : le nombre de boules seul se repetait
-      // trois fois de suite sans dire lequel des trois rangs on regarde.
-      const lb = el("text", { x: cx, y: H - mg.b + 18, "text-anchor": "middle",
-        fill: "var(--muted)", "font-size": 11 });
-      lb.textContent = `${x.boules}+${x.etoiles}`;
-      svg.appendChild(lb);
-
-      const rg = el("text", { x: cx, y: H - mg.b + 32, "text-anchor": "middle",
-        fill: "var(--muted)", "font-size": 9.5 });
-      rg.textContent = `rang ${x.rang}`;
-      svg.appendChild(rg);
-    });
-
-    annotation(svg, mg.g + (px / d.length) / 2 + 6, Y(d[0].rho) - 14, "témoin", "start");
-
-    const ax = el("text", { x: mg.g + px / 2, y: H - mg.b + 50, "text-anchor": "middle",
-      fill: "var(--muted)", "font-size": 11.5 });
-    ax.textContent = "boules + étoiles exigées par le rang";
-    svg.appendChild(ax);
-
-    // Le rang du jackpot se reconnait a sa combinaison (toutes les boules et
-    // toutes les etoiles), jamais a un classement par effectif : une heuristique
-    // du genre « le rang le moins documente » designe un autre rang des que les
-    // donnees changent, et la legende se met alors a raconter n'importe quoi.
-    const jackpot = d.find(x => x.boules === 5 && x.etoiles === 2);
-    let texte =
-      `Corrélation entre le nombre de gagnants et le nombre de boules ≤ 31, ` +
-      `pour chacun des treize rangs de gain, classés par nombre de boules puis ` +
-      `d'étoiles exigées. L'effet croît avec la dépendance du rang aux numéros ` +
-      `principaux.`;
-    if (jackpot) {
-      texte += ` Le rang ${jackpot.rang} fait exception : c'est le jackpot, ` +
-               `non remporté dans ${jackpot.part_sans_gagnant} % des tirages et ` +
-               `gagné par une poignée de joueurs quand il l'est. Une variable aussi ` +
-               `grossière laisse peu de prise à une corrélation de rang.`;
-    }
-    document.getElementById("cap-rangs").textContent = texte;
-
-    document.getElementById("encadre-temoin").innerHTML =
-      `Le rang ${po.rang_temoin} n'exige qu'<b>une seule boule principale</b>. ` +
-      `Si l'effet observé était un artefact, il y apparaîtrait comme ailleurs. ` +
-      `Or il y est pratiquement nul : ρ = <b>${fr(po.rho_temoin)}</b> ` +
-      `(p = ${fr(po.p_temoin)}, non significatif), contre ` +
-      `<b>${fr(po.rho_principal)}</b> au rang ${po.rang_principal}. ` +
-      `L'effet suit exactement ce que la mécanique du jeu prédit.`;
-  })();
-
   // ---- Tableau popularité ----------------------------------------------
+  const po = DONNEES.popularite;
   (function () {
-    const po = DONNEES.popularite;
     const lignes = [
-      ["Boules ≤ 31 par tirage, en moyenne", po.moyenne_observee, po.moyenne_theorique],
-      ["Tirages dont les 5 boules sont ≤ 31", po.part_observee + " %", po.part_theorique + " %"],
+      ["Boules ≤ 31 par tirage, en moyenne", fr(po.moyenne_observee.toFixed(2)), fr(po.moyenne_theorique.toFixed(2))],
+      ["Tirages dont les 5 boules sont ≤ 31", fr(po.part_observee.toFixed(1)) + " %", fr(po.part_theorique.toFixed(1)) + " %"],
     ];
     document.querySelector("#t-popularite tbody").innerHTML = lignes.map(
-      l => `<tr><td>${l[0]}</td><td class="num">${String(l[1]).replace(".", ",")}</td>` +
-           `<td class="num">${String(l[2]).replace(".", ",")}</td></tr>`).join("");
+      l => `<tr><td>${l[0]}</td><td class="num">${l[1]}</td><td class="num">${l[2]}</td></tr>`).join("");
+  })();
+
+  // ---- Graphique 4 : gagnants et gain selon les petits numéros ---------
+  // Deux graphiques cote a cote plutot qu'un seul a deux echelles : les
+  // gagnants et les euros ne se lisent pas sur le meme axe.
+  (function () {
+    const d = po.medianes;
+    const [b, e] = po.principale.split("+");
+    document.getElementById("titre-gagnants").textContent =
+      `Gagnants à ${b} boules et ${e} étoile (médiane par tirage)`;
+    document.getElementById("titre-gain").textContent =
+      `Gain par grille gagnante, même combinaison (médiane)`;
+
+    function panneau(id, champ, format, pasGrille) {
+      const svg = document.getElementById(id);
+      const L = 420, H = 280, mg = { h: 12, b: 58, g: 58, d: 8 };
+      const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+      const yMax = Math.max(...d.map(x => x[champ])) * 1.12;
+      const Y = v => mg.h + ph * (1 - v / yMax);
+      const pas = px / d.length, larg = Math.min(pas * 0.56, 44);
+      graduations(svg, mg.g, L - mg.d, Y, 0, yMax, pasGrille, format);
+      d.forEach((x, i) => {
+        const cx = mg.g + i * pas + pas / 2;
+        // La colonne « 0 boule » ne repose que sur une poignee de tirages :
+        // elle est estompee pour ne pas se lire comme les autres.
+        const r = el("rect", { x: cx - larg / 2, y: Y(x[champ]), width: larg,
+          height: Y(0) - Y(x[champ]), rx: 3, fill: "var(--series)",
+          "fill-opacity": x.tirages < 50 ? 0.35 : 1 });
+        survol(r, `<b>${x.petits} boule${x.petits > 1 ? "s" : ""} ≤ 31</b>` +
+                  `<br>${nb(x.gagnants)} gagnants (médiane)` +
+                  `<br>${euros(x.gain)} par grille (médiane)<br>${nb(x.tirages)} tirages`);
+        svg.appendChild(r);
+        const lb = el("text", { x: cx, y: H - mg.b + 18, "text-anchor": "middle",
+          fill: "var(--muted)", "font-size": 11.5 });
+        lb.textContent = x.petits;
+        svg.appendChild(lb);
+        const n = el("text", { x: cx, y: H - mg.b + 32, "text-anchor": "middle",
+          fill: "var(--muted)", "font-size": 9.5 });
+        n.textContent = `${nb(x.tirages)} tir.`;
+        svg.appendChild(n);
+      });
+      const ax = el("text", { x: mg.g + px / 2, y: H - 6, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 11 });
+      ax.textContent = "boules ≤ 31 dans le tirage";
+      svg.appendChild(ax);
+    }
+    panneau("g-gagnants", "gagnants", v => nb(v), 20000);
+    panneau("g-gain", "gain", v => fr(v) + " €", 4);
+
+    const typ = d.find(x => x.petits === po.typique), haut = d.find(x => x.petits === po.haut);
+    document.getElementById("cap-popularite").textContent =
+      `Comparé à un tirage typique (${po.typique} boules ≤ 31, le cas le plus fréquent), ` +
+      `un tirage entièrement composé de « dates de naissance » produit ` +
+      `${signe(po.gagnants_vs_typique)} % de gagnants, et chacun touche ` +
+      `${euros(haut.gain)} au lieu de ${euros(typ.gain)}, soit ${signe(po.gain_vs_typique)} %. ` +
+      `Corrélation de Spearman : ρ = ${signe(po.rho_principal, 3)} pour les gagnants, ` +
+      `${signe(po.rho_gain, 3)} pour le gain. La colonne estompée ne repose que sur ` +
+      `${nb(d[0].tirages)} tirages et se lit avec prudence.`;
+  })();
+
+  // ---- Graphique 5 : la dose -------------------------------------------
+  (function () {
+    const c = po.combinaisons;
+    const mesurees = c.filter(x => x.mesurable);
+    const familles = [0, 1, 2].map(e => ({
+      etoiles: e,
+      couleur: `var(--serie-${e})`,
+      forme: ["cercle", "carre", "losange"][e],
+      points: mesurees.filter(x => x.etoiles === e).sort((a, b) => a.boules - b.boules),
+    })).filter(f => f.points.length);
+    const nomFamille = e => `${e} étoile${e > 1 ? "s" : ""} exigée${e > 1 ? "s" : ""}`;
+
+    document.getElementById("legende-dose").innerHTML = familles.map(f =>
+      `<span><i class="pastille" style="background:${f.couleur}; border-radius:${
+        f.forme === "cercle" ? "50%" : "2px"}; ${f.forme === "losange" ? "transform:rotate(45deg) scale(.85);" : ""}"></i>` +
+      `${nomFamille(f.etoiles)}</span>`).join("");
+
+    const svg = document.getElementById("g-dose");
+    const L = 880, H = 320, mg = { h: 16, b: 48, g: 56, d: 130 };
+    const px = L - mg.g - mg.d, ph = H - mg.h - mg.b;
+    const bas = Math.min(0, ...mesurees.map(x => x.ic_gagnants[0]));
+    const haut = Math.max(...mesurees.map(x => x.ic_gagnants[1]));
+    const yMin = Math.floor(bas / 5) * 5, yMax = Math.ceil((haut + 1) / 5) * 5;
+    const Y = v => mg.h + ph * (1 - (v - yMin) / (yMax - yMin));
+    const X = (boules, e) => mg.g + px * (boules - 0.5) / 5 + (e - 1) * 9;
+
+    graduations(svg, mg.g, L - mg.d, Y, yMin, yMax, 5, v => signe(v) + " %");
+    svg.appendChild(el("line", { x1: mg.g, x2: L - mg.d, y1: Y(0), y2: Y(0),
+      stroke: "var(--axis)", "stroke-width": 1.5 }));
+
+    for (let b = 1; b <= 5; b++) {
+      const lb = el("text", { x: X(b, 1), y: H - mg.b + 20, "text-anchor": "middle",
+        fill: "var(--muted)", "font-size": 11.5 });
+      lb.textContent = b;
+      svg.appendChild(lb);
+    }
+    const ax = el("text", { x: mg.g + px / 2, y: H - 8, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11.5 });
+    ax.textContent = "boules principales exigées par la combinaison";
+    svg.appendChild(ax);
+
+    function marqueur(f, x, y) {
+      const commun = { fill: f.couleur, stroke: "var(--surface)", "stroke-width": 2 };
+      if (f.forme === "cercle") return el("circle", { cx: x, cy: y, r: 5.5, ...commun });
+      if (f.forme === "carre") return el("rect", { x: x - 5, y: y - 5, width: 10, height: 10, rx: 1.5, ...commun });
+      return el("path", { d: `M ${x} ${y - 7} L ${x + 7} ${y} L ${x} ${y + 7} L ${x - 7} ${y} Z`, ...commun });
+    }
+
+    familles.forEach(f => {
+      let d = "";
+      f.points.forEach((pt, i) => d += (i ? " L " : "M ") + X(pt.boules, f.etoiles) + " " + Y(pt.effet_gagnants));
+      svg.appendChild(el("path", { d, fill: "none", stroke: f.couleur, "stroke-width": 2 }));
+    });
+    familles.forEach(f => {
+      f.points.forEach(pt => {
+        const x = X(pt.boules, f.etoiles);
+        svg.appendChild(el("line", { x1: x, x2: x, y1: Y(pt.ic_gagnants[0]), y2: Y(pt.ic_gagnants[1]),
+          stroke: f.couleur, "stroke-width": 1.5, "stroke-opacity": 0.7 }));
+        const m = marqueur(f, x, Y(pt.effet_gagnants));
+        survol(m, `<b>${pt.combinaison}</b> (rang ${pt.rang})` +
+                  `<br>gagnants : ${signe(pt.effet_gagnants, 1)} % par petite boule ` +
+                  `[${signe(pt.ic_gagnants[0], 1)} ; ${signe(pt.ic_gagnants[1], 1)}]` +
+                  `<br>gain par grille : ${signe(pt.effet_gain, 1)} %`);
+        svg.appendChild(m);
+      });
+      // Etiquette directe en bout de ligne : l'identite ne repose pas sur la
+      // seule couleur. Decalage vertical pour les lignes presque confondues.
+      const dernier = f.points[f.points.length - 1];
+      const lb = el("text", { x: L - mg.d + 12, y: Y(dernier.effet_gagnants) + 4 + (f.etoiles - 1) * 13,
+        fill: "var(--ink-2)", "font-size": 12 });
+      lb.textContent = nomFamille(f.etoiles);
+      svg.appendChild(lb);
+    });
+
+    const temoin = c.find(x => x.combinaison === po.temoin);
+    if (temoin && temoin.mesurable) {
+      annotation(svg, X(temoin.boules, temoin.etoiles), Y(temoin.ic_gagnants[1]) - 12, "témoin", "start");
+    }
+
+    const exclues = c.filter(x => !x.mesurable);
+    document.getElementById("cap-dose").textContent =
+      `Variation du nombre de gagnants pour chaque boule ≤ 31 de plus dans le tirage, ` +
+      `avec son intervalle de confiance à 95 %. ` +
+      (po.dose_effet
+        ? `Dans chaque famille, l'effet croît avec le nombre de boules exigées, et les trois ` +
+          `familles se superposent presque : le nombre d'étoiles exigées n'y change pratiquement rien. `
+        : `Attention : l'effet ne croît pas partout avec le nombre de boules exigées. `) +
+      (exclues.length
+        ? `Non mesurées, faute de gagnants assez réguliers : ` +
+          exclues.map(x => `${x.combinaison} (${x.part_sans_gagnant} % de tirages sans gagnant)`).join(", ") + "."
+        : "");
+
+    document.querySelector("#t-dose tbody").innerHTML = c.map(x =>
+      `<tr><td>${x.combinaison}</td><td class="num">${x.rang}</td>` +
+      (x.mesurable
+        ? `<td class="num">${signe(x.effet_gagnants, 1)} % [${signe(x.ic_gagnants[0], 1)} ; ${signe(x.ic_gagnants[1], 1)}]</td>` +
+          `<td class="num">${signe(x.effet_gain, 1)} % [${signe(x.ic_gain[0], 1)} ; ${signe(x.ic_gain[1], 1)}]</td>`
+        : `<td class="num" colspan="2">non mesurable : ${x.part_sans_gagnant} % de tirages sans gagnant</td>`) +
+      `</tr>`).join("");
+
+    const [i1, i2] = po.ic_temoin;
+    document.getElementById("encadre-temoin").innerHTML =
+      `La combinaison ${po.temoin} n'exige qu'<b>une seule boule principale</b>. ` +
+      `Son nombre de gagnants varie de <b>${signe(po.effet_temoin, 1)} %</b> par petite boule ` +
+      `[${signe(i1, 1)} ; ${signe(i2, 1)}], ` +
+      (po.temoin_nul ? `un effet qu'on ne distingue pas de zéro` : `un effet faible`) +
+      `, contre ${signe(c.find(x => x.combinaison === po.principale).effet_gagnants, 1)} % ` +
+      `à ${po.principale}. ` +
+      (po.dose_effet
+        ? `L'effet grandit ensuite à chaque boule exigée : il vient bien des numéros que cochent les joueurs.`
+        : `Mais la progression n'est pas régulière partout : l'interprétation reste à revoir.`);
+
+    document.getElementById("conclusion-popularite").innerHTML =
+      `<strong>L'opportunité vient donc entièrement du comportement des joueurs, ` +
+      `pas du tirage.</strong> Une grille contenant des numéros supérieurs à 31 a ` +
+      `exactement la même probabilité de gagner, mais quand elle gagne, elle partage ` +
+      `avec moins de monde : à ${po.principale}, chaque boule ≤ 31 du tirage change le gain ` +
+      `de ${signe(po.effet_principal_gain, 1)} %. Le jackpot, trop rarement gagné, échappe à cette ` +
+      `mesure : l'effet y est extrapolé, pas observé.`;
+  })();
+
+  // ---- Conclusion --------------------------------------------------------
+  (function () {
+    const m = DONNEES.multiples;
+    const survivants = DONNEES.tests.filter(x => x.p < m.bonferroni);
+    document.getElementById("conclusion").innerHTML = survivants.length
+      ? `Au moins un écart résiste à la correction pour tests multiples : ` +
+        `${survivants.map(x => x.nom).join(" ; ")}. Il mérite d'être examiné avant toute conclusion.`
+      : `Les écarts de fréquence qu'affichent tous les sites de statistiques sont la ` +
+        `signature normale du hasard. Sur cinquante numéros, il y en aura toujours un ` +
+        `en tête et un en queue, même avec des boules parfaitement équilibrées : ici, ` +
+        `le plus sorti ne fait pas mieux que ce qu'un tirage équilibré produit dans ` +
+        `${Math.round(ref.p_maximum * 100)} % des cas, et le plus atypique, le ${ext.numero}, ` +
+        `est un numéro ${ext.sens === "sous" ? "froid" : "chaud"} dont l'écart ne survit pas ` +
+        `à la correction pour tests multiples.`;
   })();
 })();
 </script>

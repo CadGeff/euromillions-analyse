@@ -5,29 +5,43 @@ Periode : 13/02/2004 -> 15/09/2026   (1981 tirages)
 
 Modele : a chaque tirage, un numero sort ou ne sort pas, avec une
 probabilite B/K. Sur N tirages, ses sorties suivent B(N, B/K).
-Les 5 boules d'un meme tirage etant distinctes, la statistique de
-Pearson a pour moyenne K-B et non K-1 : elle est mise a l'echelle
+Les numeros d'un meme tirage etant distincts, la statistique de
+Pearson suit (K-B)/(K-1) x chi2(K-1) : elle est mise a l'echelle
 avant comparaison. Chaque test est double d'une simulation du
 tirage reel (voir modele.py).
 
 1. Les boules (1-50, historique complet)
 ----------------------------------------
   Tirages                  : 1981
-  Numeros possibles        : 50
   Sorties attendues/numero : 198.1
   Ecart-type attendu       : 13.35  (simule : 13.35)
 
   Les plus sortis   : 42 (224x), 44 (224x), 23 (223x)
-  Les moins sortis  : 22 (155x), 33 (174x), 18 (177x)
+  Les moins sortis  : 22 (155x), 33 (174x), 18 (177x), 46 (177x)
+  Dans un historique equilibre, le numero de tete atteint au moins 224 sorties
+  dans 82 % des cas, et celui de queue descend a 155 ou moins dans 2.4 % des cas.
 
-  Statistique brute : 52.90
-  Mise a l'echelle  : x 1.0889  -> 57.60
-  Seuil critique 5% : 66.34  (49 ddl)
-  p-value           : 0.1871
-  p-value simulee   : 0.1852
+  a) Ajustement global (khi-deux)
+     Statistique brute : 52.90
+     Mise a l'echelle  : x 1.0889  -> 57.60
+     Valeur moyenne sous le hasard : 49 ; observee au 81e centile
+     Seuil critique 5% : 66.34  (49 ddl)
+     p-value           : 0.1871   (simulee : 0.1852)
+     => Compatible avec l'equiprobabilite.
 
-  => Compatible avec l'equiprobabilite. Les ecarts observes
-     sont ce que produit un tirage equilibre.
+  b) Numero par numero (loi binomiale exacte)
+     Bande a 95 %                    : 172 a 225 sorties
+     Bande corrigee (50 comparaisons) : 156 a 243 sorties
+     Hors bande a 95 %      : 1 numero(s) [22]  (attendu par hasard : 2.5)
+     Hors bande corrigee    : 1 numero(s) [22]
+     Le plus atypique : le 22, 155 sorties (sous-represente)
+        p individuelle      : 0.00099
+        p corrigee (Bonferroni, x50) : 0.0497
+        p corrigee (simulation)      : 0.0442   <- retenue
+     La simulation mesure directement la question posee : dans un
+     historique equilibre, a quelle frequence le plus atypique des
+     50 numeros l'est-il au moins autant ? Bonferroni en donne une
+     borne, un peu plus prudente.
 
 2. Les etoiles, regime par regime
 ---------------------------------
@@ -42,7 +56,7 @@ tirage reel (voir modele.py).
   2011-2016 : 50 boules / 11 etoiles
      562 tirages, 11 etoiles possibles
      brut=18.38  x1.1111  -> 20.42   seuil=18.31
-     p=0.0255   p simulee=0.0293   -> SOUS LE SEUIL
+     p=0.0255   p simulee=0.0293   -> SOUS LE SEUIL DE 5 %
 
   2016+ : 50 boules / 12 etoiles
      1041 tirages, 12 etoiles possibles
@@ -52,102 +66,125 @@ tirage reel (voir modele.py).
 3. Les absences prolongees
 --------------------------
   L'intuition du 'numero en retard' suppose qu'une longue absence
-  appelle une sortie. Voici ce que le hasard produit sans aide :
+  appelle une sortie. Pour juger une absence, il faut savoir ce que
+  le hasard produit : 2000 historiques equilibres simules.
 
-  Absence la plus longue observee : 87 tirages (numero 16)
-  Absence maximale mediane        : 54 tirages
-  Plus longue absence au 15/09/2026  : 36 tirages (numero 32)
+                                   observe    simulation (IC 95 %)
+  Record, tous numeros confondus :     87      90  (74 a 124)
+  Record median par numero       :     54      53  (50 a 57)
 
-  Chaque numero a deja connu une absence de plusieurs dizaines
-  de tirages. En voir une n'a donc rien d'anormal, et ne change
-  en rien la probabilite du prochain tirage.
+  Le record observe (87 tirages, numero 16) est atteint ou depasse
+  dans 65 % des historiques equilibres.
+  Plus longue absence en cours au 15/09/2026 : 36 tirages (numero 32).
+
+  Les absences observees sont celles d'un tirage equilibre. En voir
+  une longue ne change rien a la probabilite du prochain tirage.
 
 4. Ce qu'on peut reellement optimiser
 -------------------------------------
   Impossible d'augmenter ses chances de gagner. Possible, en
-  revanche, d'augmenter ce qu'on gagne SI l'on gagne : le jackpot
-  est partage entre tous les gagnants.
+  revanche, d'augmenter ce qu'on gagne SI l'on gagne : chaque rang
+  partage une cagnotte entre ses gagnants.
 
   Les boules, elles, ignorent la zone des dates de naissance :
 
      Boules <= 31 par tirage, en moyenne  : 3.12  (theorie : 3.10)
      Tirages dont les 5 boules sont <= 31 : 8.1 %  (theorie : 8.0 %)
 
-  Restait a montrer que les JOUEURS, eux, ne les ignorent pas.
-  Le nombre de gagnants le revele : a rang fixe, il vaut environ
-  (grilles jouees) x (probabilite qu'une grille corresponde), et
-  ce second facteur depend des numeros que les joueurs cochent.
+  Restait a montrer que les JOUEURS, eux, ne les ignorent pas, et
+  que cela se paie. A combinaison fixee, le nombre de gagnants vaut
+  environ (grilles jouees) x (probabilite qu'une grille corresponde),
+  et ce second facteur depend des numeros que les joueurs cochent.
+  Le gain par grille, lui, vaut (cagnotte du rang) / (gagnants).
 
-  Gagnants au rang 10 (3 boules) selon le tirage :
+  Combinaison 3+0 (3 boules, aucune etoile), selon le tirage :
 
-     0 boule(s) <= 31 : mediane     78 046 gagnants (11 tirages)
-     1 boule(s) <= 31 : mediane     69 472 gagnants (82 tirages)
-     2 boule(s) <= 31 : mediane     73 053 gagnants (429 tirages)
-     3 boule(s) <= 31 : mediane     80 841 gagnants (755 tirages)
-     4 boule(s) <= 31 : mediane     91 178 gagnants (544 tirages)
-     5 boule(s) <= 31 : mediane    107 815 gagnants (159 tirages)
+     boules <= 31   gagnants (mediane)   gain par grille (mediane)   tirages
+          0             78 046                16,00 EUR              11
+          1             69 472                14,35 EUR              82
+          2             73 053                13,00 EUR             429
+          3             80 841                12,00 EUR             755
+          4             91 178                10,90 EUR             544
+          5            107 815                 9,10 EUR             160
 
-     Correlation de Spearman : rho = +0.290  (p = 1.2e-39)
+     Spearman, gagnants : rho = +0.290  (p = 1.2e-39)
+     Spearman, gain     : rho = -0.385  (p = 5.8e-71)
+     5 boules <= 31 contre 3 (le cas typique) : +33 % de gagnants, -24 % de gain.
+     La ligne a 0 boule repose sur trop peu de tirages pour etre lue seule.
 
-  Le temoin ecarte l'explication fortuite. L'effet doit suivre le
-  nombre de boules principales exigees par le rang :
+  Relation dose-effet. Si l'effet vient des numeros coches, sa taille
+  doit croitre avec le nombre de boules principales qu'exige la
+  combinaison. Mesure : variation par boule <= 31 supplementaire dans
+  le tirage (pente log-lineaire, effets fixes par regime, IC 95 %).
 
-     rang 11 : 1 boules + 2 etoiles   rho = +0.039   <- temoin : n'exige qu'une boule
-     rang 13 : 2 boules + 0 etoiles   rho = +0.208
-     rang 12 : 2 boules + 1 etoiles   rho = +0.161
-     rang  8 : 2 boules + 2 etoiles   rho = +0.134
-     rang 10 : 3 boules + 0 etoiles   rho = +0.290   <- rang de reference
-     rang  9 : 3 boules + 1 etoiles   rho = +0.233
-     rang  6 : 3 boules + 2 etoiles   rho = +0.288
-     rang  7 : 4 boules + 0 etoiles   rho = +0.245
-     rang  5 : 4 boules + 1 etoiles   rho = +0.310
-     rang  4 : 4 boules + 2 etoiles   rho = +0.227
-     rang  3 : 5 boules + 0 etoiles   rho = +0.280
-     rang  2 : 5 boules + 1 etoiles   rho = +0.206
-     rang  1 : 5 boules + 2 etoiles   rho = +0.054
+     combinaison   gagnants                   gain par grille
+     2+0  (rang 13)    +6.4 % [ +4.8 ;  +8.1]    -6.6 % [ -6.9 ;  -6.3]
+     3+0  (rang 10)   +10.9 % [ +9.3 ; +12.6]   -10.5 % [-11.0 ; -10.0]   <- reference
+     4+0  (rang  7)   +15.4 % [+13.5 ; +17.3]   -13.9 % [-14.7 ; -13.0]
+     5+0  (rang  3)   +18.7 % [+15.6 ; +21.9]   -17.7 % [-20.0 ; -15.3]
+     2+1  (rang 12)    +6.1 % [ +4.5 ;  +7.7]    -6.3 % [ -6.9 ;  -5.6]
+     3+1  (rang  9)   +10.8 % [ +9.1 ; +12.6]   -10.5 % [-11.1 ;  -9.8]
+     4+1  (rang  5)   +15.4 % [+13.5 ; +17.4]   -13.9 % [-14.7 ; -13.1]
+     5+1  (rang  2)   non mesurable : 6 % de tirages sans gagnant
+     1+2  (rang 11)    +1.1 % [ -0.6 ;  +2.9]    -1.6 % [ -2.7 ;  -0.5]   <- temoin
+     2+2  (rang  8)    +5.5 % [ +3.7 ;  +7.4]    -5.9 % [ -6.8 ;  -4.9]
+     3+2  (rang  6)   +10.0 % [ +8.0 ; +12.0]    -9.4 % [-10.6 ;  -8.1]
+     4+2  (rang  4)   +14.4 % [+12.0 ; +16.8]   -13.0 % [-14.7 ; -11.2]
+     5+2  (rang  1)   non mesurable : 77 % de tirages sans gagnant
 
-  Le rang 11, qui n'exige qu'une boule principale, ne reagit
-  pratiquement pas (rho = +0.039, p = 0.09).
-  L'effet n'est donc pas un artefact : il suit exactement la
-  dependance de chaque rang aux numeros principaux.
+     0 etoile(s) : 2+0 +6.4 %  <  3+0 +10.9 %  <  4+0 +15.4 %  <  5+0 +18.7 %   -> coherent
+     1 etoile(s) : 2+1 +6.1 %  <  3+1 +10.8 %  <  4+1 +15.4 %   -> coherent
+     2 etoile(s) : 1+2 +1.1 %  <  2+2 +5.5 %  <  3+2 +10.0 %  <  4+2 +14.4 %   -> coherent
+
+  Le temoin 1+2, seule combinaison a n'exiger qu'une boule, varie de +1.1 %
+  par petite boule [-0.6 ; +2.9] : un effet indiscernable de zero.
+  A etoiles egales, l'effet croit avec les boules exigees, pour les
+  gagnants comme pour le gain : il vient des numeros que cochent
+  les joueurs. Le nombre d'etoiles exigees, lui, n'y change presque rien.
 
   Conclusion : une grille contenant des numeros > 31 a la meme
-  probabilite de sortir, mais serait partagee avec moins de monde.
-  C'est la seule conclusion actionnable de cette analyse, et elle
-  ne dit rien sur la probabilite de gagner.
+  probabilite de gagner, mais quand elle gagne, elle partage avec
+  moins de monde. A la combinaison 3+0, chaque boule <= 31 du tirage
+  change le gain de -10.5 %. Le jackpot, trop rarement gagne,
+  echappe a cette mesure : l'effet y est extrapole, pas observe.
 
 5. Le piege des tests multiples
 -------------------------------
-  4 tests d'ajustement ont ete menes. Un seuil a 5 % signifie
-  qu'un test sur vingt franchit la barre par pur hasard, meme
-  quand rien n'est biaise. Sur 4 tests, la probabilite d'en voir
-  au moins un 'significatif' par accident vaut 19 %.
+  5 tests ont ete menes sur les tirages. Un seuil a 5 % signifie
+  qu'un test sur vingt franchit la barre par pur hasard, meme quand
+  rien n'est biaise. Sur 5 tests, la probabilite d'en voir au moins
+  un 'significatif' par accident vaut environ 23 %.
 
-  La correction de Bonferroni divise le seuil par 4 :
-  il passe de 0.05 a 0.0125.
+  La correction de Bonferroni divise le seuil par 5 :
+  il passe de 0.05 a 0.0100.
 
-     Boules, historique complet             p = 0.1871   au-dessus
-     Etoiles 2004-2011                      p = 0.6305   au-dessus
-     Etoiles 2011-2016                      p = 0.0255   au-dessus
-     Etoiles 2016+                          p = 0.1681   au-dessus
+     Boules 1-50, ajustement global           p = 0.1871   au-dessus
+     Boules 1-50, numero le plus atypique     p = 0.0442   sous 5 %, au-dessus du seuil corrige
+     Etoiles 2004-2011                        p = 0.6305   au-dessus
+     Etoiles 2011-2016                        p = 0.0255   sous 5 %, au-dessus du seuil corrige
+     Etoiles 2016+                            p = 0.1681   au-dessus
 
   Le seuil de 5 % n'est pas une frontiere entre le vrai et le faux :
   c'est une convention. p = 0.049 et p = 0.051 decrivent des donnees
   pratiquement identiques.
 
-  => Aucun test ne survit a la correction. C'est precisement
-     ainsi que naissent les fausses decouvertes : en multipliant
+  => 2 test(s) sous 5 %, aucun ne survit a la correction.
+     C'est ainsi que naissent les fausses decouvertes : en multipliant
      les decoupages jusqu'a en trouver un qui passe, puis en ne
      publiant que celui-la.
 
 Conclusion
 ----------
-  Les 'numeros chauds' n'existent pas. Les ecarts de frequence
-  visibles dans n'importe quel tableau de statistiques sont la
-  signature normale du hasard : sur 50 numeros, il y en aura
-  toujours un en tete et un en queue, meme avec des boules
-  parfaitement equilibrees.
+  Les 'numeros chauds' n'existent pas. Le score du numero de tete
+  (224 sorties) est egale ou depasse dans 82 % des historiques
+  equilibres, et aucun ecart ne resiste a la correction pour tests
+  multiples.
+  Le plus atypique, le 22, est sous-represente (p = 0.044) :
+  un tel extreme apparait dans environ un historique equilibre sur 23,
+  et il ne franchit pas le seuil corrige (0.01).
 
-  La FDJ le dit elle-meme sur ses pages de statistiques : il n'est
-  pas possible de determiner des probabilites fiables sur les
-  tirages a venir.
+  La FDJ ecrit sur sa page de statistiques qu'il n'est pas possible
+  de determiner des probabilites fiables sur les tirages : entendu
+  comme « on ne peut pas prevoir le prochain tirage ». Les probabilites
+  elles-memes sont parfaitement connues ; ce projet les calcule.
+  https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/statistiques

@@ -19,8 +19,16 @@ l'oeil : seule la variance differe. Pour K=50, B=5, N=1981 :
     vrai  : sigma = sqrt(N x 1/10 x 9/10)   = 13.35   (4.3 % plus etroit)
 
 Le meme oubli affecte le test d'ajustement. La statistique de Pearson ne suit
-pas chi2(K-1) ici : sa moyenne vaut K-B et non K-1. Il faut donc la mettre a
-l'echelle par (K-1)/(K-B) avant de la comparer a chi2(K-1).
+pas chi2(K-1) ici. La covariance entre les effectifs de deux numeros vaut
+-N p(1-p) / (K-1) : la matrice de covariance est celle d'une loi multinomiale
+multipliee par (K-B)/(K-1). La statistique brute suit donc, pour N grand,
+(K-B)/(K-1) x chi2(K-1) - pas seulement en moyenne, en loi. La multiplier par
+(K-1)/(K-B) la ramene exactement sur chi2(K-1).
+
+Deux approximations ont egalement ete retirees des bandes de variation :
+l'approximation normale de la loi binomiale, fausse en queue de distribution
+(voir Tirage.bande), et l'absence de reference pour les absences prolongees
+(voir simuler_absences).
 
 Plutot que de faire confiance a ces formules, `verifier()` les confronte a une
 simulation du tirage reel. C'est ce qui a permis de trancher la premiere fois,
@@ -64,19 +72,39 @@ class Tirage:
     def facteur_khi2(self) -> float:
         """Mise a l'echelle de la statistique de Pearson vers chi2(K-1).
 
-        La statistique brute a pour moyenne K-B au lieu de K-1 : la multiplier
-        par (K-1)/(K-B) la ramene sur la loi de reference.
+        La statistique brute suit (K-B)/(K-1) x chi2(K-1) : la multiplier par
+        (K-1)/(K-B) la ramene sur la loi de reference.
         """
         return (self.K - 1) / (self.K - self.B)
 
-    def bande(self, risque: float, comparaisons: int = 1) -> tuple[float, float]:
-        """Intervalle de variation normale autour de l'attendu.
+    def p_individuelle(self, sorties: np.ndarray | int) -> np.ndarray | float:
+        """p-value bilaterale exacte d'un effectif, sous la loi B(N, B/K).
+
+        Deux fois la plus petite des deux queues, bornee a 1 : la convention
+        usuelle pour une loi discrete et asymetrique.
+        """
+        sorties = np.asarray(sorties)
+        bas = stats.binom.cdf(sorties, self.N, self.p)
+        haut = stats.binom.sf(sorties - 1, self.N, self.p)
+        return np.minimum(1.0, 2 * np.minimum(bas, haut))
+
+    def bande(self, risque: float, comparaisons: int = 1) -> tuple[int, int]:
+        """Plus petit et plus grand effectif qui ne sont PAS signales.
+
+        Calculee sur la loi binomiale exacte. L'approximation normale, utilisee
+        auparavant, est fausse precisement la ou la bande sert : en queue. Avec
+        la correction pour 50 comparaisons, elle placait la borne basse a 154,2,
+        et le 22 (155 sorties) dedans ; la loi exacte la place a 156, et le 22
+        dehors. La loi B(N, 1/10) est asymetrique : sa queue basse est plus
+        courte que ne le suppose la loi normale.
 
         `comparaisons` applique la correction de Bonferroni : examiner K numeros
         a la fois multiplie les occasions de depasser la bande par hasard.
         """
-        z = stats.norm.ppf(1 - risque / (2 * comparaisons))
-        return self.attendu - z * self.ecart_type, self.attendu + z * self.ecart_type
+        seuil = risque / comparaisons
+        valeurs = np.arange(self.N + 1)
+        retenues = valeurs[self.p_individuelle(valeurs) >= seuil]
+        return int(retenues.min()), int(retenues.max())
 
     def test_ajustement(self, effectifs: np.ndarray) -> dict:
         """Test d'equiprobabilite, avec la correction du modele sans remise."""
@@ -89,53 +117,110 @@ class Tirage:
             "facteur": self.facteur_khi2,
             "ddl": ddl,
             "critique": float(stats.chi2.ppf(1 - SEUIL, ddl)),
-            "p": float(1 - stats.chi2.cdf(khi2, ddl)),
+            "p": float(stats.chi2.sf(khi2, ddl)),
         }
+
+
+def simuler_effectifs(t: Tirage, repetitions: int, graine: int) -> np.ndarray:
+    """`repetitions` historiques complets de N tirages de B numeros distincts
+    parmi K. Renvoie les effectifs, un historique par ligne."""
+    rng = np.random.default_rng(graine)
+    base = np.tile(np.arange(t.K), (t.N, 1))
+    effectifs = np.empty((repetitions, t.K), dtype=np.int64)
+    for i in range(repetitions):
+        # Chaque ligne est melangee independamment ; ses B premieres valeurs
+        # sont B numeros distincts, tous les sous-ensembles equiprobables.
+        tires = rng.permuted(base, axis=1)[:, : t.B]
+        effectifs[i] = np.bincount(tires.ravel(), minlength=t.K)
+    return effectifs
 
 
 def verifier(t: Tirage, repetitions: int = 4000, graine: int = 20260922) -> dict:
     """Confronte les formules ci-dessus a une simulation du tirage reel.
 
-    On simule `repetitions` historiques completes de N tirages, chacun tirant B
+    On simule `repetitions` historiques complets de N tirages, chacun tirant B
     numeros distincts parmi K, puis on compare :
       - l'ecart-type simule des effectifs a `ecart_type`
       - la moyenne simulee de la statistique brute a K-B
       - la p-value empirique a celle donnee par la loi corrigee
 
-    Un ecart notable signale une erreur de modele, pas une fluctuation.
+    La simulation fournit aussi les lois de reference des extremes : le plus
+    grand effectif, le plus petit, et la plus petite p-value individuelle
+    parmi les K numeros. C'est la bonne reference pour juger « le numero le
+    plus sorti » : il y en a toujours un, et il faut savoir jusqu'ou le hasard
+    le pousse.
+
+    Un ecart notable entre formule et simulation signale une erreur de modele,
+    pas une fluctuation.
     """
-    rng = np.random.default_rng(graine)
-    base = np.tile(np.arange(t.K), (t.N, 1))
+    effectifs = simuler_effectifs(t, repetitions, graine)
+    khi2 = ((effectifs - t.attendu) ** 2 / t.attendu).sum(axis=1)
 
     # On suit les effectifs de CHAQUE numero d'une simulation a l'autre : c'est
-    # cette dispersion-la que `ecart_type` pretend decrire. Mesurer l'ecart
-    # entre les K numeros d'une meme simulation donnerait une autre quantite,
-    # sous-estimee, et validerait la formule a tort.
-    #
-    # Les K numeros sont interchangeables sous l'hypothese nulle : on estime
-    # donc l'ecart-type sur chacun, puis on moyenne les K estimations. Suivre
-    # un seul numero donnerait la meme valeur en esperance, mais avec une
-    # imprecision qui ferait passer la formule pour fausse.
-    suivi = np.empty((repetitions, t.K))
-    khi2 = np.empty(repetitions)
-    for i in range(repetitions):
-        tires = rng.permuted(base, axis=1)[:, : t.B]
-        effectifs = np.bincount(tires.ravel(), minlength=t.K)
-        suivi[i] = effectifs
-        khi2[i] = ((effectifs - t.attendu) ** 2 / t.attendu).sum()
-
+    # cette dispersion-la que `ecart_type` pretend decrire. Les K numeros etant
+    # interchangeables sous l'hypothese nulle, on moyenne les K estimations.
     return {
-        "ecart_type_simule": float(suivi.std(axis=0).mean()),
+        "ecart_type_simule": float(effectifs.std(axis=0).mean()),
         "ecart_type_formule": t.ecart_type,
         "khi2_moyen_simule": float(khi2.mean()),
         "khi2_moyen_attendu": float(t.K - t.B),
         "distribution": khi2,
+        "maximums": effectifs.max(axis=1),
+        "minimums": effectifs.min(axis=1),
+        "p_minimales": t.p_individuelle(effectifs).min(axis=1),
     }
 
 
-def p_empirique(distribution: np.ndarray, khi2_brut: float) -> float:
-    """Proportion des simulations atteignant ou depassant la valeur observee."""
-    return float((distribution >= khi2_brut).mean())
+def p_empirique(distribution: np.ndarray, observe: float, sens: str = "haut") -> float:
+    """Proportion des simulations au moins aussi extremes que l'observation.
+
+    `sens="haut"` : valeurs >= observe ; `sens="bas"` : valeurs <= observe.
+    """
+    if sens == "haut":
+        return float((distribution >= observe).mean())
+    return float((distribution <= observe).mean())
+
+
+def plus_longues_absences(presence: np.ndarray) -> np.ndarray:
+    """Pour chaque colonne d'une matrice booleenne (tirages x numeros), la
+    plus longue serie de tirages consecutifs sans sortie.
+
+    Les series de debut et de fin d'historique comptent, comme dans l'analyse
+    des donnees reelles : la reference doit etre mesuree de la meme facon que
+    l'observation.
+    """
+    n = presence.shape[0]
+    records = np.empty(presence.shape[1], dtype=np.int64)
+    for k in range(presence.shape[1]):
+        sorties = np.flatnonzero(presence[:, k])
+        if sorties.size == 0:
+            records[k] = n
+            continue
+        bornes = np.concatenate(([-1], sorties, [n]))
+        records[k] = int((np.diff(bornes) - 1).max())
+    return records
+
+
+def simuler_absences(t: Tirage, repetitions: int = 2000, graine: int = 20260923) -> dict:
+    """Lois de reference des absences prolongees, sous l'hypothese nulle.
+
+    Sans elles, montrer les absences observees ne demontre rien : on ne sait
+    pas si 87 tirages d'absence est long ou banal. On simule donc des
+    historiques complets et on releve, pour chacun, le record toutes boules
+    confondues et la mediane des records par numero.
+    """
+    rng = np.random.default_rng(graine)
+    base = np.tile(np.arange(t.K), (t.N, 1))
+    record = np.empty(repetitions, dtype=np.int64)
+    mediane = np.empty(repetitions)
+    for i in range(repetitions):
+        tires = rng.permuted(base, axis=1)[:, : t.B]
+        presence = np.zeros((t.N, t.K), dtype=bool)
+        np.put_along_axis(presence, tires, True, axis=1)
+        records = plus_longues_absences(presence)
+        record[i] = records.max()
+        mediane[i] = np.median(records)
+    return {"record": record, "mediane": mediane}
 
 
 if __name__ == "__main__":
@@ -149,4 +234,6 @@ if __name__ == "__main__":
               f"simule {v['ecart_type_simule']:.3f}")
         print(f"   khi2 moyen : attendu {v['khi2_moyen_attendu']:.2f}  "
               f"simule {v['khi2_moyen_simule']:.2f}")
+        print(f"   variance du khi2 : attendue {2 * (t.K - t.B) ** 2 / (t.K - 1):.1f}  "
+              f"simulee {v['distribution'].var():.1f}")
         print()

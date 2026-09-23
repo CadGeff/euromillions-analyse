@@ -24,3 +24,6 @@ desktop.ini
 # Les CSV extraits, eux, SONT versionnes : sans eux le projet
 # n'est pas reproductible.
 *.zip
+
+# Tests
+.pytest_cache/
