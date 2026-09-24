@@ -268,6 +268,63 @@ def effet_par_petit(valeurs: pd.Series, petits: pd.Series, regimes: pd.Series) -
     }
 
 
+def reports_du_jackpot(df: pd.DataFrame) -> pd.Series:
+    """Nombre de tirages consecutifs sans gagnant du jackpot AVANT chaque
+    tirage. Chaque report grossit le jackpot, et un gros jackpot attire des
+    joueurs : c'est la principale source de variation du volume de grilles.
+
+    Le jackpot est gagne si des gagnants 5+2 sont publies, ou, a defaut (un
+    tirage sans chiffres europeens), si un gain 5+2 a ete verse en France.
+    """
+    gagnants = pd.to_numeric(df[colonne_gagnants((5, 2))], errors="coerce")
+    gains = pd.to_numeric(df[colonne_rapport((5, 2))], errors="coerce")
+    gagne = (gagnants > 0).where(gagnants.notna(), gains > 0)
+    reports, courant = [], 0
+    for jackpot_gagne in gagne:
+        reports.append(courant)
+        courant = 0 if jackpot_gagne else courant + 1
+    return pd.Series(reports, index=df.index, dtype=float)
+
+
+def controle_du_volume(df: pd.DataFrame, petits: pd.Series) -> dict:
+    """Le volume de joueurs fausse-t-il l'effet des petits numeros ?
+
+    Le volume varie fortement avec la taille du jackpot. Pour qu'il fausse
+    l'effet, il faudrait qu'il soit AUSSI lie a la composition du tirage. On
+    le verifie de deux facons :
+      - lien direct entre les reports du jackpot et le nombre de petites
+        boules du tirage ;
+      - effet a 3+0 re-estime en controlant le volume, d'abord par les
+        reports, puis par une mesure directe : les gagnants 1+2, dont le
+        nombre ne depend presque pas des boules (voir le temoin).
+    """
+    reports = reports_du_jackpot(df)
+    y = np.log(pd.to_numeric(df[colonne_gagnants(PRINCIPALE)], errors="coerce").astype(float))
+    volume = np.log(pd.to_numeric(df[colonne_gagnants(TEMOIN)], errors="coerce").astype(float))
+    cadre = pd.DataFrame({"y": y, "x": petits.astype(float), "reports": reports,
+                          "volume": volume, "g": df["regime"]}).dropna()
+    for colonne in ("y", "x", "reports", "volume"):
+        cadre[colonne] -= cadre.groupby("g")[colonne].transform("mean")
+
+    def ajuster(colonnes: list[str]) -> tuple[float, float]:
+        X = cadre[colonnes].to_numpy()
+        coefs = np.linalg.lstsq(X, cadre["y"].to_numpy(), rcond=None)[0]
+        residus = cadre["y"].to_numpy() - X @ coefs
+        r2 = 1 - float((residus ** 2).sum() / (cadre["y"] ** 2).sum())
+        return float(np.expm1(coefs[0])), r2
+
+    rho_reports, p_reports = stats.spearmanr(petits, reports)
+    sans, r2_sans = ajuster(["x"])
+    avec_reports, r2_reports = ajuster(["x", "reports"])
+    avec_volume, r2_volume = ajuster(["x", "volume"])
+    return {
+        "rho_petits_reports": float(rho_reports), "p_petits_reports": float(p_reports),
+        "effet_sans": sans, "r2_sans": r2_sans,
+        "effet_reports": avec_reports, "r2_reports": r2_reports,
+        "effet_volume": avec_volume, "r2_volume": r2_volume,
+    }
+
+
 def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Mesure les habitudes des JOUEURS a partir des gagnants et des gains.
 
@@ -404,6 +461,7 @@ def popularite(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         "haut": haut,
         "gagnants_vs_typique": float(medianes.loc[haut, "gagnants"] / medianes.loc[typique, "gagnants"] - 1),
         "gain_vs_typique": float(medianes.loc[haut, "gain"] / medianes.loc[typique, "gain"] - 1),
+        "volume": controle_du_volume(df, petits),
         "moyenne_observee": float(petits.mean()),
         "moyenne_theorique": BOULES_TIREES * SEUIL_DATES / BOULES,
         "part_observee": float((petits == 5).mean()),
@@ -580,8 +638,25 @@ def rediger(df: pd.DataFrame, boules: dict, etoiles: list[dict], absences: dict,
           f"     5 boules <= 31 contre {pop['typique']} (le cas typique) : "
           f"{pop['gagnants_vs_typique'] * 100:+.0f} % de gagnants, "
           f"{pop['gain_vs_typique'] * 100:+.0f} % de gain.",
-          "     La ligne a 0 boule repose sur trop peu de tirages pour etre lue seule.", "",
-          "  Relation dose-effet. Si l'effet vient des numeros coches, sa taille",
+          "     La ligne a 0 boule repose sur trop peu de tirages pour etre lue seule.", ""]
+    v = pop["volume"]
+    r += ["  Et le nombre de joueurs ? Il varie fortement : chaque jackpot non gagne",
+          "  grossit le suivant et attire des joueurs. Pour fausser l'effet, il",
+          "  faudrait qu'il soit aussi lie a la composition du tirage :", "",
+          f"     Reports du jackpot / petites boules du tirage : rho = "
+          f"{v['rho_petits_reports']:+.3f}  (p = {v['p_petits_reports']:.2f})", "",
+          "     Effet par petite boule a 3+0          effet     part expliquee",
+          f"     sans controle du volume            {v['effet_sans'] * 100:+6.1f} %"
+          f"       {v['r2_sans'] * 100:3.0f} %",
+          f"     en controlant les reports          {v['effet_reports'] * 100:+6.1f} %"
+          f"       {v['r2_reports'] * 100:3.0f} %",
+          f"     en controlant le volume (1+2)      {v['effet_volume'] * 100:+6.1f} %"
+          f"       {v['r2_volume'] * 100:3.0f} %", "",
+          "  Le volume explique une grande part des variations, mais l'effet des",
+          "  petits numeros reste : c'est du bruit, pas un facteur de confusion.",
+          "  Le controle par 1+2 retire un peu d'effet, car 1+2 reagit lui-meme",
+          "  legerement aux petits numeros (voir le temoin).", ""]
+    r += ["  Relation dose-effet. Si l'effet vient des numeros coches, sa taille",
           "  doit croitre avec le nombre de boules principales qu'exige la",
           "  combinaison. Mesure : variation par boule <= 31 supplementaire dans",
           "  le tirage (pente log-lineaire, effets fixes par regime, IC 95 %).", "",

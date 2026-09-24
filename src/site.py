@@ -136,6 +136,7 @@ def construire_donnees() -> dict:
             "ic_temoin": [round(v * 100, 1) for v in pop["ic_temoin"]],
             "temoin_nul": pop["temoin_nul"],
             "dose_effet": pop["dose_effet"],
+            "volume": {k: round(v, 3) for k, v in pop["volume"].items()},
             "marches": sum(len(f["marches"]) for f in pop["familles"].values()),
             "combinaisons": [
                 {"combinaison": c,

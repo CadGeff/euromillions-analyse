@@ -293,10 +293,7 @@
     que les joueurs cochent. Le gain versé à chaque grille gagnante vaut, lui,
     <em>(cagnotte du rang) ÷ (gagnants)</em>.
   </p>
-  <p>
-    Le volume de grilles varie beaucoup selon la taille du jackpot, mais il ne
-    dépend pas des numéros qui vont sortir : c'est du bruit, pas un biais.
-  </p>
+  <p id="volume-joueurs"></p>
 
   <figure>
     <div class="duo">
@@ -767,6 +764,23 @@
     ];
     document.querySelector("#t-popularite tbody").innerHTML = lignes.map(
       l => `<tr><td>${l[0]}</td><td class="num">${l[1]}</td><td class="num">${l[2]}</td></tr>`).join("");
+  })();
+
+  // ---- Le volume de joueurs : du bruit, pas un biais --------------------
+  (function () {
+    const v = po.volume;
+    const pct = x => signe(x * 100, 1) + " %";
+    document.getElementById("volume-joueurs").innerHTML =
+      `Et le nombre de joueurs ? Il varie beaucoup : chaque jackpot non gagné grossit ` +
+      `le suivant et attire du monde. Mais pour fausser la mesure, il faudrait qu'il soit ` +
+      `aussi lié aux numéros qui sortent, et ce n'est pas le cas : entre le nombre de ` +
+      `jackpots non gagnés d'affilée et le nombre de petites boules du tirage, ` +
+      `ρ = ${signe(v.rho_petits_reports, 3)}. L'effet mesuré plus bas reste le même ` +
+      `quand on tient compte du volume : ${pct(v.effet_sans)} par petite boule sans ` +
+      `contrôle, ${pct(v.effet_reports)} en contrôlant les jackpots non gagnés, ` +
+      `${pct(v.effet_volume)} en contrôlant une mesure directe du volume. ` +
+      `C'est du bruit, pas un biais. Et le gain par grille y échappe presque : ` +
+      `la cagnotte comme le nombre de gagnants suivent le volume, qui s'annule dans le calcul.`;
   })();
 
   // ---- Graphique 4 : gagnants et gain selon les petits numéros ---------

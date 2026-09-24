@@ -248,3 +248,24 @@ def test_chaque_marche_de_la_dose_est_etablie():
     _, pop = analyse.popularite(analyse.charger())
     assert pop["dose_effet"]
     assert all(m["etablie"] for f in pop["familles"].values() for m in f["marches"])
+
+
+def test_reports_du_jackpot():
+    """Tirages consecutifs sans gagnant du jackpot AVANT chaque tirage ; a
+    defaut de gagnants europeens publies, le gain verse en France tranche."""
+    import analyse
+    df = pd.DataFrame({
+        "gagnants_5b_2e": [0, 0, 1, np.nan, 0],
+        "rapport_5b_2e": [0, 0, 5e7, 0, 0],
+    })
+    assert analyse.reports_du_jackpot(df).tolist() == [0, 1, 2, 0, 1]
+
+
+def test_volume_de_joueurs_ne_fausse_pas_l_effet():
+    import analyse
+    _, pop = analyse.popularite(analyse.charger())
+    v = pop["volume"]
+    assert abs(v["rho_petits_reports"]) < 0.05
+    assert v["r2_reports"] > v["r2_sans"]
+    for effet in (v["effet_reports"], v["effet_volume"]):
+        assert abs(effet - v["effet_sans"]) < 0.02

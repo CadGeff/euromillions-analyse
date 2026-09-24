@@ -368,6 +368,27 @@ fréquent et le plus proche de la moyenne —, un tirage entièrement composé d
 **24 % de moins**. La ligne à 0 boule ne repose que sur 11 tirages et ne se lit
 pas seule.
 
+**Et le nombre de joueurs ?** Il varie fortement : chaque jackpot non gagné
+grossit le suivant et attire du monde. Pour fausser la mesure, il faudrait
+qu'il soit *aussi* lié à la composition du tirage. Ce n'est pas le cas : entre
+le nombre de jackpots non gagnés d'affilée avant un tirage et le nombre de
+petites boules de ce tirage, ρ = −0,009 (p = 0,67). Contrôler le volume ne
+change donc pas l'effet, alors même qu'il explique une grande part des
+variations :
+
+| Effet par petite boule, 3+0 | Effet | Part des variations expliquée |
+|---|---|---|
+| sans contrôle du volume | +10,9 % | 8 % |
+| en contrôlant les jackpots non gagnés d'affilée | +11,4 % | 29 % |
+| en contrôlant le volume mesuré par les gagnants 1+2 | +10,1 % | 65 % |
+
+Le volume est du bruit, pas un facteur de confusion. Le contrôle par 1+2 retire
+un peu d'effet parce que 1+2 réagit lui-même légèrement aux petits numéros (le
+témoin, plus bas). Le gain par grille, lui, y échappe presque par construction :
+la cagnotte d'un rang et son nombre de gagnants suivent tous deux le volume, qui
+s'annule dans le rapport. C'est pourquoi sa corrélation (−0,385) est plus nette
+que celle des gagnants (+0,290).
+
 Les tirages sans aucun gagnant à une combinaison sont **conservés** dans les
 corrélations. Les écarter reviendrait à conditionner sur la variable
 expliquée : au jackpot, remporté dans moins d'un tirage sur quatre, ne garder
@@ -502,6 +523,10 @@ sont reproduites à l'identique.
 - La conclusion sur la popularité ne distinguait pas ce qui est déduit (les
   grilles jouées contiennent plus de numéros ≤ 31) de ce qui est interprété
   (la raison : les dates de naissance). C'est précisé.
+- Le volume de joueurs, qui varie avec la taille du jackpot, était déclaré
+  « du bruit, pas un facteur de confusion » sans démonstration. Il est
+  désormais contrôlé, par les jackpots non gagnés d'affilée et par une mesure
+  directe du volume : l'effet ne change pas.
 
 ## Licence et source
 

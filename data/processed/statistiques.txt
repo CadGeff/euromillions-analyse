@@ -112,6 +112,22 @@ tirage reel (voir modele.py).
      5 boules <= 31 contre 3 (le cas typique) : +33 % de gagnants, -24 % de gain.
      La ligne a 0 boule repose sur trop peu de tirages pour etre lue seule.
 
+  Et le nombre de joueurs ? Il varie fortement : chaque jackpot non gagne
+  grossit le suivant et attire des joueurs. Pour fausser l'effet, il
+  faudrait qu'il soit aussi lie a la composition du tirage :
+
+     Reports du jackpot / petites boules du tirage : rho = -0.009  (p = 0.67)
+
+     Effet par petite boule a 3+0          effet     part expliquee
+     sans controle du volume             +10.9 %         8 %
+     en controlant les reports           +11.4 %        29 %
+     en controlant le volume (1+2)       +10.1 %        65 %
+
+  Le volume explique une grande part des variations, mais l'effet des
+  petits numeros reste : c'est du bruit, pas un facteur de confusion.
+  Le controle par 1+2 retire un peu d'effet, car 1+2 reagit lui-meme
+  legerement aux petits numeros (voir le temoin).
+
   Relation dose-effet. Si l'effet vient des numeros coches, sa taille
   doit croitre avec le nombre de boules principales qu'exige la
   combinaison. Mesure : variation par boule <= 31 supplementaire dans
