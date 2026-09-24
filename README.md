@@ -136,9 +136,9 @@ données et **décale tout le reste d'un cran, sans le moindre avertissement**.
 Conséquence sur les 253 tirages du fichier : dates illisibles, et des tirages
 qui semblent contenir deux fois la même boule — alors qu'il s'agit de deux
 colonnes voisines ramenées à la même position. La correction consiste à
-construire soi-même la liste des noms d'après la ligne la plus longue du
-fichier, à forcer `index_col=False`, puis à vérifier que les champs
-surnuméraires sont vides sur toutes les lignes avant de les retirer :
+construire soi-même la liste des noms, à forcer `index_col=False`, puis à
+vérifier que toutes les lignes comptent le même nombre de champs et que les
+champs surnuméraires sont vides partout avant de les retirer :
 s'ils ne l'étaient pas, l'ingestion s'arrête plutôt que de lire des données
 décalées.
 
@@ -409,6 +409,18 @@ erreurs-types, l'usuelle (HC0) et celle de Newey-West, robuste à
 l'autocorrélation. Elles diffèrent au plus de 16 %, et aucune conclusion n'en
 dépend.
 
+Ce que ces chiffres établissent, et ce qu'ils n'établissent pas. Les grilles
+jouées ne sont pas publiées ; l'analyse les voit à travers les gagnants. Mais
+le tirage est indépendant des grilles (c'est ce que confirment les tests
+d'équité), si bien que le nombre de gagnants ne peut dépendre de la
+composition du tirage qu'à travers les numéros cochés : que les grilles jouées
+contiennent plus de numéros ≤ 31 que le hasard est donc une déduction, pas une
+hypothèse. Une tendance dans le temps ne l'explique pas non plus : ajouter une
+tendance linéaire au modèle laisse l'effet à 3+0 inchangé (+10,9 %). Le
+*pourquoi*, en revanche, n'est pas mesuré : les dates de naissance en sont
+l'explication la plus plausible, puisque le seuil de 31 est celui des jours
+du mois, mais cela reste une interprétation.
+
 Une grille contenant des numéros supérieurs à 31 a donc exactement la même
 probabilité de gagner, mais quand elle gagne, elle partage avec moins de monde.
 Pour le jackpot, trop rarement gagné pour être mesuré ainsi, l'effet est
@@ -479,6 +491,17 @@ code).
   alphabétique. Elle est désormais définie par la date de son dernier tirage.
 - L'autocorrélation des résidus n'était pas prise en compte dans les
   intervalles ; elle l'est désormais (voir plus haut).
+
+**Septembre 2026, quatrième relecture** (relecture externe, avec exécution du
+code). Tous les chiffres recalculés indépendamment concordent, et les sorties
+sont reproduites à l'identique.
+
+- Une ligne trop courte était complétée par des vides sans signalement, alors
+  qu'une ligne trop longue était refusée. L'ingestion exige désormais que
+  toutes les lignes aient le même nombre de champs.
+- La conclusion sur la popularité ne distinguait pas ce qui est déduit (les
+  grilles jouées contiennent plus de numéros ≤ 31) de ce qui est interprété
+  (la raison : les dates de naissance). C'est précisé.
 
 ## Licence et source
 

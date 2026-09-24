@@ -203,7 +203,16 @@ def test_champ_en_trop_sur_une_ligne_tardive_refuse(tmp_path):
     le nombre de champs n'etait lu que sur la premiere."""
     chemin = tmp_path / "archive.csv"
     chemin.write_bytes(b"a;b\n1;2\n3;4;X\n")
-    with pytest.raises(ValueError, match="surnumeraire"):
+    with pytest.raises(ValueError, match="longueur inegale"):
+        ingest.lire_archive(chemin)
+
+
+def test_champ_manquant_sur_une_ligne_tardive_refuse(tmp_path):
+    """Quatrieme relecture : une ligne trop courte etait completee par des
+    vides sans rien dire."""
+    chemin = tmp_path / "archive.csv"
+    chemin.write_bytes(b"a;b;c\n1;2;3\n4;5\n")
+    with pytest.raises(ValueError, match=r"longueur inegale.*\[3\]"):
         ingest.lire_archive(chemin)
 
 

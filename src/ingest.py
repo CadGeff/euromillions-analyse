@@ -226,10 +226,20 @@ def lire_archive(chemin: Path, ordre: int = 0) -> tuple[pd.DataFrame, Source]:
     if len(noms) != len(entete) - int(sep_entete):
         raise ValueError(f"{chemin.name} : nom de colonne vide au milieu de l'en-tete")
 
-    # Le nombre de champs se lit sur TOUTES les lignes, pas sur la premiere :
-    # une ligne plus longue que les autres serait sinon tronquee par pandas,
-    # avec un simple avertissement, et son dernier champ perdu.
-    surnumeraires = max(len(champs) for champs in donnees) - len(noms)
+    # Toutes les lignes de donnees doivent compter le meme nombre de champs.
+    # Une ligne plus longue serait tronquee par pandas avec un simple
+    # avertissement ; une ligne plus courte serait completee par des vides.
+    # Dans les deux cas, c'est le signe d'une ligne abimee : on s'arrete.
+    longueurs = pd.Series([len(champs) for champs in donnees])
+    if longueurs.nunique() > 1:
+        # Reference : la longueur de l'en-tete si des lignes l'ont, sinon la
+        # plus frequente. Les lignes signalees sont celles qui s'en ecartent.
+        reference = (len(entete) if (longueurs == len(entete)).any()
+                     else int(longueurs.mode().iloc[0]))
+        fautives = (longueurs[longueurs != reference].index + 2).tolist()[:5]
+        raise ValueError(f"{chemin.name} : lignes de longueur inegale ({reference} champs "
+                         f"attendus) - lignes {fautives}")
+    surnumeraires = int(longueurs.iloc[0]) - len(noms)
     if surnumeraires < 0:
         raise ValueError(f"{chemin.name} : moins de champs que de noms de colonnes")
     vides = [f"_champ_vide_{i + 1}" for i in range(surnumeraires)]
